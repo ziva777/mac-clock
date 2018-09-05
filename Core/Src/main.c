@@ -223,6 +223,30 @@ typedef enum {
 
 	CH_EQ = SEGMENTS(U_SEGMENT, P_SEGMENT, F_SEGMENT, E_SEGMENT),
 	CH_NEQ = SEGMENTS(U_SEGMENT, P_SEGMENT, T_SEGMENT, N_SEGMENT),
+	CH_PLUS = SEGMENTS(U_SEGMENT, P_SEGMENT, M_SEGMENT, S_SEGMENT),
+	CH_MINUS = SEGMENTS(U_SEGMENT, P_SEGMENT),
+	CH_DIVISION = SEGMENTS(T_SEGMENT, N_SEGMENT),
+	CH_LESS = SEGMENTS(R_SEGMENT, N_SEGMENT),
+	CH_MORE = SEGMENTS(K_SEGMENT, T_SEGMENT),
+	CH_LESS_OR_EQ = SEGMENTS(R_SEGMENT, N_SEGMENT, U_SEGMENT),
+	CH_MORE_OR_EQ = SEGMENTS(K_SEGMENT, T_SEGMENT, P_SEGMENT),
+
+	CH_OPEN_ROUND_BRACKET = SEGMENTS(R_SEGMENT, N_SEGMENT),
+	CH_CLOSE_ROUND_BRACKET = SEGMENTS(K_SEGMENT, T_SEGMENT),
+	CH_OPEN_SQUARE_BRACKET = SEGMENTS(B_SEGMENT, M_SEGMENT, S_SEGMENT, E_SEGMENT),
+	CH_CLOSE_SQUARE_BRACKET = SEGMENTS(A_SEGMENT, M_SEGMENT, S_SEGMENT, F_SEGMENT),
+	CH_OPEN_CURLY_BRACKET = SEGMENTS(B_SEGMENT, M_SEGMENT, S_SEGMENT, E_SEGMENT, U_SEGMENT),
+	CH_CLOSE_CURLY_BRACKET = SEGMENTS(A_SEGMENT, M_SEGMENT, S_SEGMENT, F_SEGMENT, P_SEGMENT),
+	CH_APOSTROPHE = SEGMENTS(M_SEGMENT),
+	CH_QUOTE = SEGMENTS(M_SEGMENT, C_SEGMENT),
+	CH_ASTERISK = SEGMENTS(K_SEGMENT, M_SEGMENT, N_SEGMENT, P_SEGMENT, R_SEGMENT, S_SEGMENT, T_SEGMENT, U_SEGMENT),
+	CH_NUMBER = SEGMENTS(M_SEGMENT, C_SEGMENT, U_SEGMENT, F_SEGMENT, S_SEGMENT, D_SEGMENT, P_SEGMENT, E_SEGMENT),
+	CH_DOLLAR = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT, M_SEGMENT, S_SEGMENT),
+	CH_PERSENT = SEGMENTS(T_SEGMENT, N_SEGMENT, M_SEGMENT, S_SEGMENT, A_SEGMENT, H_SEGMENT, E_SEGMENT, D_SEGMENT, U_SEGMENT, P_SEGMENT),
+	CH_AMP = SEGMENTS(K_SEGMENT, A_SEGMENT, M_SEGMENT, R_SEGMENT, E_SEGMENT, U_SEGMENT, G_SEGMENT, F_SEGMENT),
+	CH_COMMA = SEGMENTS(T_SEGMENT),
+	CH_BROKEN_BAR = SEGMENTS(M_SEGMENT, S_SEGMENT),
+	CH_UNDERSCORE = SEGMENTS(F_SEGMENT, E_SEGMENT),
 
     N_CHARS
 } Character;
@@ -234,7 +258,7 @@ typedef enum {
  */
 typedef enum {
     DOT_OBSCURE = 0,
-	DOT_HIGHLIGHT
+	DOT_HIGHLIGHT = 1
 } Dot;
 /* */
 
@@ -315,10 +339,301 @@ void DisplayWrite(Display *display,
 	}
 
 	/* Sending */
-	HAL_SPI_Transmit(&hspi1, display->buffer, display->buffer_size / sizeof(uint16_t), 1000);
-	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-	HAL_Delay(1);
-	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+//	HAL_SPI_Transmit(&hspi1, display->buffer, display->buffer_size / sizeof(uint16_t), 1000);
+//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+//	HAL_Delay(1);
+//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+}
+
+void DisplayWriteWithoutDots(Display *display,
+							 Character str[],
+							 size_t size)
+{
+	/* Symbol buffer */
+	for (size_t i = display->dots_buffer_size;
+		 i != size + display->dots_buffer_size;
+		 ++i)
+	{
+		((uint16_t *)display->buffer)[i] = str[i-display->dots_buffer_size];
+	}
+
+	/* Sending */
+//	HAL_SPI_Transmit(&hspi1, display->buffer, display->buffer_size / sizeof(uint16_t), 1000);
+//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+//	HAL_Delay(1);
+//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+}
+
+Character AsciiToCharacter(char c)
+{
+	Character ch;
+
+	switch (c) {
+	case 'A':
+		ch = CH_A;
+		break;
+	case 'B':
+		ch = CH_B;
+		break;
+	case 'C':
+		ch = CH_C;
+		break;
+	case 'D':
+		ch = CH_D;
+		break;
+	case 'E':
+		ch = CH_E;
+		break;
+	case 'F':
+		ch = CH_F;
+		break;
+	case 'G':
+		ch = CH_G;
+		break;
+	case 'H':
+		ch = CH_H;
+		break;
+	case 'I':
+		ch = CH_I;
+		break;
+	case 'J':
+		ch = CH_J;
+		break;
+	case 'K':
+		ch = CH_K;
+		break;
+	case 'L':
+		ch = CH_L;
+		break;
+	case 'M':
+		ch = CH_M;
+		break;
+	case 'N':
+		ch = CH_N;
+		break;
+	case 'O':
+		ch = CH_O;
+		break;
+	case 'P':
+		ch = CH_P;
+		break;
+	case 'Q':
+		ch = CH_Q;
+		break;
+	case 'R':
+		ch = CH_R;
+		break;
+	case 'S':
+		ch = CH_S;
+		break;
+	case 'T':
+		ch = CH_T;
+		break;
+	case 'U':
+		ch = CH_U;
+		break;
+	case 'V':
+		ch = CH_V;
+		break;
+	case 'W':
+		ch = CH_W;
+		break;
+	case 'X':
+		ch = CH_X;
+		break;
+	case 'Y':
+		ch = CH_Y;
+		break;
+	case 'Z':
+		ch = CH_Z;
+		break;
+
+	case 'a':
+		ch = CH_a;
+		break;
+	case 'b':
+		ch = CH_b;
+		break;
+	case 'c':
+		ch = CH_c;
+		break;
+	case 'd':
+		ch = CH_d;
+		break;
+	case 'e':
+		ch = CH_e;
+		break;
+	case 'f':
+		ch = CH_f;
+		break;
+	case 'g':
+		ch = CH_g;
+		break;
+	case 'h':
+		ch = CH_h;
+		break;
+	case 'i':
+		ch = CH_i;
+		break;
+	case 'j':
+		ch = CH_j;
+		break;
+	case 'k':
+		ch = CH_k;
+		break;
+	case 'l':
+		ch = CH_l;
+		break;
+	case 'm':
+		ch = CH_m;
+		break;
+	case 'n':
+		ch = CH_n;
+		break;
+	case 'o':
+		ch = CH_o;
+		break;
+	case 'p':
+		ch = CH_p;
+		break;
+	case 'q':
+		ch = CH_q;
+		break;
+	case 'r':
+		ch = CH_r;
+		break;
+	case 's':
+		ch = CH_s;
+		break;
+	case 't':
+		ch = CH_t;
+		break;
+	case 'u':
+		ch = CH_u;
+		break;
+	case 'v':
+		ch = CH_v;
+		break;
+	case 'w':
+		ch = CH_w;
+		break;
+	case 'x':
+		ch = CH_x;
+		break;
+	case 'y':
+		ch = CH_y;
+		break;
+	case 'z':
+		ch = CH_z;
+		break;
+
+	case '0':
+		ch = CH_0;
+		break;
+	case '1':
+		ch = CH_1;
+		break;
+	case '2':
+		ch = CH_2;
+		break;
+	case '3':
+		ch = CH_3;
+		break;
+	case '4':
+		ch = CH_4;
+		break;
+	case '5':
+		ch = CH_5;
+		break;
+	case '6':
+		ch = CH_6;
+		break;
+	case '7':
+		ch = CH_7;
+		break;
+	case '8':
+		ch = CH_8;
+		break;
+	case '9':
+		ch = CH_9;
+		break;
+
+	case ' ':
+		ch = CH_BLANK;
+		break;
+	case '=':
+		ch = CH_EQ;
+		break;
+	case '+':
+		ch = CH_PLUS;
+		break;
+	case '-':
+		ch = CH_MINUS;
+		break;
+	case '/':
+		ch = CH_DIVISION;
+		break;
+	case '<':
+		ch = CH_LESS;
+		break;
+	case '>':
+		ch = CH_MORE;
+		break;
+
+	case '(':
+		ch = CH_OPEN_ROUND_BRACKET;
+		break;
+	case ')':
+		ch = CH_CLOSE_ROUND_BRACKET;
+		break;
+	case '[':
+		ch = CH_OPEN_SQUARE_BRACKET;
+		break;
+	case ']':
+		ch = CH_CLOSE_SQUARE_BRACKET;
+		break;
+	case '{':
+		ch = CH_OPEN_CURLY_BRACKET;
+		break;
+	case '}':
+		ch = CH_CLOSE_CURLY_BRACKET;
+		break;
+
+	case '\'':
+		ch = CH_APOSTROPHE;
+		break;
+	case '"':
+		ch = CH_QUOTE;
+		break;
+	case '#':
+		ch = CH_NUMBER;
+		break;
+	case '$':
+		ch = CH_DOLLAR;
+		break;
+	case '%':
+		ch = CH_PERSENT;
+		break;
+	case '&':
+		ch = CH_AMP;
+		break;
+	case ',':
+	case '.':
+		ch = CH_COMMA;
+		break;
+	case '|':
+		ch = CH_BROKEN_BAR;
+		break;
+	case '_':
+		ch = CH_UNDERSCORE;
+		break;
+
+	default:
+		ch = CH_ASTERISK;
+		break;
+	}
+
+	return ch;
 }
 
 void DisplayWriteStr(Display *display,
@@ -326,9 +641,83 @@ void DisplayWriteStr(Display *display,
 					 size_t n)
 {
 	Character c[n];
-	Dot d[n];
 
-	//DisplayWrite()
+	for (size_t i = 0, j = n-1; i != n; ++i, --j) {
+		c[j] = AsciiToCharacter(str[i]);
+	}
+
+	DisplayWriteWithoutDots(display, c, n);
+}
+
+void DisplayWriteUint(Display *display,
+					  uint32_t value)
+{
+	Character c[display->size];
+
+	memset(c, CH_BLANK, sizeof(c));
+
+	if (value) {
+		uint8_t d;
+		size_t i = 0;
+
+		while (value) {
+			d = value % 10;
+			c[i] = AsciiToCharacter(d + '0');
+			value /= 10;
+			++i;
+
+		}
+	} else {
+		c[0] = CH_0;
+	}
+
+	DisplayWriteWithoutDots(display, c, display->size);
+}
+/* */
+
+
+/*
+ * Display controller
+ */
+typedef struct {
+	SPI_HandleTypeDef *hspi;
+	GPIO_TypeDef *port;
+	uint16_t pin;
+	uint32_t transmit_timeout;
+
+} DisplayController;
+
+void DisplayControllerCreate(DisplayController *controller,
+							 SPI_HandleTypeDef *hspi,
+							 GPIO_TypeDef *port,
+							 uint16_t pin)
+{
+	controller->hspi = hspi;
+	controller->port = port;
+	controller->pin = pin;
+	controller->transmit_timeout = 1000;
+}
+
+void DisplayControllerDispose(DisplayController *controller)
+{
+
+}
+
+HAL_StatusTypeDef DisplayControllerSend(DisplayController *controller,
+										Display *display)
+{
+	HAL_StatusTypeDef ret;
+
+	/* Sending */
+	ret = HAL_SPI_Transmit(&hspi1,
+						   display->buffer,
+						   display->buffer_size / sizeof(uint16_t),
+						   controller->transmit_timeout);
+	HAL_GPIO_TogglePin(controller->port, controller->pin);
+	HAL_Delay(1);
+	HAL_GPIO_TogglePin(controller->port, controller->pin);
+
+	return ret;
 }
 /* */
 
@@ -357,6 +746,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	Display display;
+	DisplayController controller;
 	size_t n_places = 6;
 	Character c[6];
 	Dot d[6];
@@ -369,13 +759,14 @@ int main(void)
 	c[5] = CH_C;
 
 	d[0] = DOT_OBSCURE;
-	d[1] = DOT_HIGHLIGHT;
-	d[2] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
 	d[3] = DOT_OBSCURE;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_HIGHLIGHT;
+	d[4] = DOT_HIGHLIGHT;
+	d[5] = DOT_OBSCURE;
 
 	DisplayCreate(&display, n_places);
+	DisplayControllerCreate(&controller, &hspi1, LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
 
   /* USER CODE END 1 */
 
@@ -427,6 +818,9 @@ int main(void)
 
   ///
   DisplayWrite(&display, c, d, n_places);
+  DisplayControllerSend(&controller, &display);
+  DisplayWriteStr(&display, "CLOUDY", n_places);
+  DisplayControllerSend(&controller, &display);
 //  uint16_t aa_dma[7];
 	//memset(aa_dma, 0xFF, 14);
 //  memset(aa_dma, 0b1, 14);
@@ -450,7 +844,7 @@ int main(void)
   MX_FREERTOS_Init();
 
   /* Start scheduler */
-  osKernelStart();
+  //osKernelStart();
   
   /* We should never get here as control is now taken by the scheduler */
 
@@ -462,42 +856,54 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-		c[0] = CH_D;
-		c[1] = CH_U;
-		c[2] = CH_O;
-		c[3] = CH_L;
-		c[4] = CH_C;
-		c[5] = CH_BLANK;
-
-		DisplayWrite(&display, c, d, n_places);
-
-//		for (int i = 0; i != 256; ++i) {
-//			htim5.Instance->CCR4 = i;
-//			HAL_Delay(10);
-//		}
+	  DisplayWriteStr(&display, "CLOUDY", n_places);
+	  DisplayControllerSend(&controller, &display);
+	  HAL_Delay(1000);
+	  DisplayWriteStr(&display, "DOLLAR", n_places);
+	  DisplayControllerSend(&controller, &display);
+	  HAL_Delay(1000);
+	  DisplayWriteUint(&display, 0);
+	  DisplayControllerSend(&controller, &display);
+	  HAL_Delay(1000);
+	  DisplayWriteUint(&display, 123456);
+	  DisplayControllerSend(&controller, &display);
+	  HAL_Delay(1000);
+//		c[0] = CH_D;
+//		c[1] = CH_U;
+//		c[2] = CH_O;
+//		c[3] = CH_L;
+//		c[4] = CH_C;
+//		c[5] = CH_BLANK;
 //
-		HAL_Delay(1000);
+//		DisplayWrite(&display, c, d, n_places);
 //
-//		for (int i = 255; i != 0; --i) {
-//			htim5.Instance->CCR4 = i;
-//			HAL_Delay(10);
-//		}
-
-		//HAL_Delay(1000);
-
-//		htim5.Instance->CCR4 = 250;
+////		for (int i = 0; i != 256; ++i) {
+////			htim5.Instance->CCR4 = i;
+////			HAL_Delay(10);
+////		}
+////
 //		HAL_Delay(1000);
+////
+////		for (int i = 255; i != 0; --i) {
+////			htim5.Instance->CCR4 = i;
+////			HAL_Delay(10);
+////		}
 //
-		c[0] = CH_R;
-		c[1] = CH_I;
-		c[2] = CH_A;
-		c[3] = CH_F;
-		c[4] = CH_BLANK;
-		c[5] = CH_BLANK;
-
-		DisplayWrite(&display, c, d, n_places);
-//		htim5.Instance->CCR4 = 100;
-		HAL_Delay(1000);
+//		//HAL_Delay(1000);
+//
+////		htim5.Instance->CCR4 = 250;
+////		HAL_Delay(1000);
+////
+//		c[0] = CH_R;
+//		c[1] = CH_I;
+//		c[2] = CH_A;
+//		c[3] = CH_F;
+//		c[4] = CH_BLANK;
+//		c[5] = CH_BLANK;
+//
+//		DisplayWrite(&display, c, d, n_places);
+////		htim5.Instance->CCR4 = 100;
+//		HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 
