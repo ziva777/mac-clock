@@ -68,16 +68,6 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
-//uint16_t aa_dma[ 2 * 3 * 8 * 2 + 1 ];
-//uint32_t aa_dma[ 49 ] = {10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10,25,10};
-//uint32_t aa_dma[ 20 ] = {10,1000,10,1000,10,1000,10,1000,10,1000,10,1000,10,1000,10,1000,10,1000,10,1000};
-//uint16_t ii = 0;
-
-//static const uint16_t A = 0b0010110110011001;
-
-
-
 #define N_BITS_IN_BYTE 8
 
 
@@ -250,119 +240,6 @@ typedef enum {
 
     N_CHARS
 } Character;
-/* */
-
-
-/*
- * Dot
- */
-typedef enum {
-    DOT_OBSCURE = 0,
-	DOT_HIGHLIGHT = 1
-} Dot;
-/* */
-
-
-/*
- * Display
- */
-typedef struct {
-    void *buffer;
-    size_t size; 				/* number of places */
-    size_t buffer_size; 		/* buffer size in bytes */
-
-    size_t symbols_buffer_size; /* symbols chunk size in 16bits */
-    size_t dots_buffer_size;	/* dots chunk size in 16bits */
-} Display;
-
-void DisplayCreate(Display *display,
-                   size_t size)
-{
-	/* Display buffer structure:
-	 *  symbols            dots
-	 * |5|4|3|2|1|0| xxxx |0|1|2|3|4|5|
-	 * */
-
-	display->size = size;
-	display->symbols_buffer_size = size;
-	display->dots_buffer_size = (size / (sizeof(uint16_t) * N_BITS_IN_BYTE) + 1);
-	display->buffer_size =
-			(display->symbols_buffer_size + display->dots_buffer_size) * sizeof(uint16_t);
-
-    display->buffer = malloc(display->buffer_size);
-
-    memset(display->buffer, 0, display->buffer_size);
-}
-
-void DisplayDispose(Display *display)
-{
-    display->size = 0;
-    display->symbols_buffer_size = 0;
-    display->dots_buffer_size = 0;
-    display->buffer_size = 0;
-
-    free(display->buffer);
-}
-
-void DisplayWrite(Display *display,
-                  Character str[],
-                  Dot dot[],
-                  size_t size)
-{
-	size_t dot_buff_size = (size / N_BITS_IN_BYTE) + 1;
-	uint8_t *dot_buff = malloc(dot_buff_size);
-	size_t k, l;
-
-	/* Dots buffer */
-	memset(dot_buff, 0, dot_buff_size);
-
-	for (size_t i = 0, j = size-1;
-		 i != size; ++i, --j)
-	{
-		k = i / 8;
-		l = i % 8;
-
-		if (dot[j] == DOT_HIGHLIGHT) {
-			dot_buff[k] |= POW2(l);
-		}
-	}
-
-	memcpy(display->buffer, dot_buff, dot_buff_size);
-	free(dot_buff);
-
-	/* Symbol buffer */
-	for (size_t i = display->dots_buffer_size;
-		 i != size + display->dots_buffer_size;
-		 ++i)
-	{
-		((uint16_t *)display->buffer)[i] = str[i-display->dots_buffer_size];
-	}
-
-	/* Sending */
-//	HAL_SPI_Transmit(&hspi1, display->buffer, display->buffer_size / sizeof(uint16_t), 1000);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-//	HAL_Delay(1);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-}
-
-void DisplayWriteWithoutDots(Display *display,
-							 Character str[],
-							 size_t size)
-{
-	/* Symbol buffer */
-	for (size_t i = display->dots_buffer_size;
-		 i != size + display->dots_buffer_size;
-		 ++i)
-	{
-		((uint16_t *)display->buffer)[i] = str[i-display->dots_buffer_size];
-	}
-
-	/* Sending */
-//	HAL_SPI_Transmit(&hspi1, display->buffer, display->buffer_size / sizeof(uint16_t), 1000);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-//	HAL_Delay(1);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-}
 
 Character AsciiToCharacter(char c)
 {
@@ -635,6 +512,245 @@ Character AsciiToCharacter(char c)
 
 	return ch;
 }
+/* */
+
+
+/*
+ * Dot
+ */
+typedef enum {
+    DOT_OBSCURE = 0,
+	DOT_HIGHLIGHT = 1
+} Dot;
+/* */
+
+
+/*
+ * DisplayBuffer
+ * Internal buffer for Display to holding raw bits.
+ */
+typedef struct {
+    void *buffer;				/* Raw buffer */
+
+    size_t logical_size; 		/* number of places */
+    size_t buffer_size; 		/* buffer size in bytes */
+
+    size_t symbols_buffer_size; /* symbols chunk size in 16bits */
+    size_t dots_buffer_size;	/* dots chunk size in 16bits */
+} DisplayBuffer;
+
+// decl
+
+void DisplayBufferCreate(DisplayBuffer *buffer,
+                   		 size_t logical_size);
+
+void DisplayBufferDispose(DisplayBuffer *buffer);
+
+void DisplayBufferWrite(DisplayBuffer *buffer,
+                  		Character str[],
+                  		Dot dot[],
+                  		size_t logical_size);
+
+void DisplayBufferWriteDots(DisplayBuffer *buffer,
+							Dot dot[],
+							size_t logical_size);
+
+void DisplayBufferWriteCharacters(DisplayBuffer *buffer,
+							 	  Character str[],
+							 	  size_t logical_size);
+
+// impl
+
+void DisplayBufferCreate(DisplayBuffer *buffer,
+                   		 size_t logical_size)
+{
+	/* DisplayBuffer buffer structure:
+	 *  symbols            dots
+	 * |5|4|3|2|1|0| xxxx |0|1|2|3|4|5|
+	 * N ............................ 0
+	 * */
+
+	buffer->logical_size = logical_size;
+	buffer->symbols_buffer_size = logical_size;
+	buffer->dots_buffer_size = (logical_size / (sizeof(uint16_t) * N_BITS_IN_BYTE) + 1);
+	buffer->buffer_size = (buffer->symbols_buffer_size + buffer->dots_buffer_size) * sizeof(uint16_t);
+    buffer->buffer = malloc(buffer->buffer_size);
+
+    memset(buffer->buffer, 0, buffer->buffer_size);
+}
+
+void DisplayBufferDispose(DisplayBuffer *buffer)
+{
+    buffer->logical_size = 0;
+    buffer->symbols_buffer_size = 0;
+    buffer->dots_buffer_size = 0;
+    buffer->buffer_size = 0;
+
+    free(buffer->buffer);
+}
+
+void DisplayBufferWrite(DisplayBuffer *buffer,
+                  		Character str[],
+                  		Dot dot[],
+                  		size_t logical_size)
+{
+	DisplayBufferWriteDots(buffer, dot, logical_size);
+	DisplayBufferWriteCharacters(buffer, str, logical_size);
+}
+
+void DisplayBufferWriteDots(DisplayBuffer *buffer,
+							Dot dot[],
+							size_t logical_size)
+{
+	size_t dot_buff_size = (logical_size / N_BITS_IN_BYTE) + 1;
+	uint8_t *dot_buff = malloc(dot_buff_size);
+	size_t k, l;
+
+	/* Dots buffer */
+	memset(dot_buff, 0, dot_buff_size);
+
+	for (size_t i = 0, j = logical_size-1;
+		 i != logical_size; ++i, --j)
+	{
+		k = i / 8;
+		l = i % 8;
+
+		if (dot[j] == DOT_HIGHLIGHT) {
+			dot_buff[k] |= POW2(l);
+		}
+	}
+
+	memcpy(buffer->buffer, dot_buff, dot_buff_size);
+	free(dot_buff);
+}
+
+void DisplayBufferWriteCharacters(DisplayBuffer *buffer,
+							 	  Character str[],
+							 	  size_t logical_size)
+{
+	/* Symbol buffer */
+	for (size_t i = buffer->dots_buffer_size;
+		 i != logical_size + buffer->dots_buffer_size;
+		 ++i)
+	{
+		((uint16_t *)buffer->buffer)[i] = str[i-buffer->dots_buffer_size];
+	}
+}
+/* */
+
+
+/*
+ * Display controller
+ * Module to display 18 segment LED
+ */
+typedef struct {
+	SPI_HandleTypeDef *hspi;
+	GPIO_TypeDef *port;
+	uint16_t pin;
+	uint32_t transmit_timeout;
+
+	DisplayBuffer display_buffer;
+} Display;
+
+// decl
+
+void DisplayCreate(Display *display,
+				   size_t n_places,
+				   SPI_HandleTypeDef *hspi,
+				   GPIO_TypeDef *port,
+				   uint16_t pin);
+
+void DisplayDispose(Display *display);
+
+void DisplayWrite(Display *display,
+				  Character str[],
+                  Dot dot[],
+                  size_t n);
+
+void DisplayWriteCharacters(Display *display,
+							Character str[],
+							size_t n);
+
+void DisplayWriteDots(Display *display,
+					  Dot dot[],
+					  size_t n);
+
+void DisplayWriteStr(Display *display,
+					 const char *str,
+					 size_t n);
+
+void DisplayWriteUint(Display *display,
+					  uint32_t value);
+
+// impl
+
+HAL_StatusTypeDef DisplaySend(Display *display);
+
+void DisplayCreate(Display *display,
+				   size_t n_places,
+				   SPI_HandleTypeDef *hspi,
+				   GPIO_TypeDef *port,
+				   uint16_t pin)
+{
+	display->hspi = hspi;
+	display->port = port;
+	display->pin = pin;
+	display->transmit_timeout = 1000;
+
+	DisplayBufferCreate(&(display->display_buffer), n_places);
+	DisplaySend(display);
+}
+
+void DisplayDispose(Display *display)
+{
+	DisplayBufferDispose(&display->display_buffer);
+}
+
+HAL_StatusTypeDef DisplaySend(Display *display)
+{
+	HAL_StatusTypeDef ret;
+
+	/* Sending */
+	ret = HAL_SPI_Transmit(&hspi1,
+						   display->display_buffer.buffer,
+						   display->display_buffer.buffer_size / sizeof(uint16_t),
+						   display->transmit_timeout);
+	HAL_GPIO_TogglePin(display->port, display->pin);
+	HAL_Delay(1);
+	HAL_GPIO_TogglePin(display->port, display->pin);
+
+//		HAL_SPI_Transmit(&hspi1, display->display_buffer.display_buffer, 7, 1000);
+//		HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+//		HAL_Delay(1);
+//		HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+
+	return ret;
+}
+
+void DisplayWrite(Display *display,
+				  Character str[],
+                  Dot dot[],
+                  size_t n)
+{
+	DisplayBufferWrite(&display->display_buffer, str, dot, n);
+	DisplaySend(display);
+}
+
+void DisplayWriteCharacters(Display *display,
+							 Character str[],
+							 size_t n)
+{
+	DisplayBufferWriteCharacters(&display->display_buffer, str, n);
+	DisplaySend(display);
+}
+
+void DisplayWriteDots(Display *display,
+					  Dot dot[],
+					  size_t n)
+{
+	DisplayBufferWriteDots(&display->display_buffer, dot, n);
+	DisplaySend(display);
+}
 
 void DisplayWriteStr(Display *display,
 					 const char *str,
@@ -646,13 +762,14 @@ void DisplayWriteStr(Display *display,
 		c[j] = AsciiToCharacter(str[i]);
 	}
 
-	DisplayWriteWithoutDots(display, c, n);
+	DisplayBufferWriteCharacters(&display->display_buffer, c, n);
+	DisplaySend(display);
 }
 
 void DisplayWriteUint(Display *display,
 					  uint32_t value)
 {
-	Character c[display->size];
+	Character c[display->display_buffer.logical_size];
 
 	memset(c, CH_BLANK, sizeof(c));
 
@@ -671,53 +788,8 @@ void DisplayWriteUint(Display *display,
 		c[0] = CH_0;
 	}
 
-	DisplayWriteWithoutDots(display, c, display->size);
-}
-/* */
-
-
-/*
- * Display controller
- */
-typedef struct {
-	SPI_HandleTypeDef *hspi;
-	GPIO_TypeDef *port;
-	uint16_t pin;
-	uint32_t transmit_timeout;
-
-} DisplayController;
-
-void DisplayControllerCreate(DisplayController *controller,
-							 SPI_HandleTypeDef *hspi,
-							 GPIO_TypeDef *port,
-							 uint16_t pin)
-{
-	controller->hspi = hspi;
-	controller->port = port;
-	controller->pin = pin;
-	controller->transmit_timeout = 1000;
-}
-
-void DisplayControllerDispose(DisplayController *controller)
-{
-
-}
-
-HAL_StatusTypeDef DisplayControllerSend(DisplayController *controller,
-										Display *display)
-{
-	HAL_StatusTypeDef ret;
-
-	/* Sending */
-	ret = HAL_SPI_Transmit(&hspi1,
-						   display->buffer,
-						   display->buffer_size / sizeof(uint16_t),
-						   controller->transmit_timeout);
-	HAL_GPIO_TogglePin(controller->port, controller->pin);
-	HAL_Delay(1);
-	HAL_GPIO_TogglePin(controller->port, controller->pin);
-
-	return ret;
+	DisplayBufferWriteCharacters(&display->display_buffer, c, display->display_buffer.logical_size);
+	DisplaySend(display);
 }
 /* */
 
@@ -734,6 +806,28 @@ void MX_FREERTOS_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+uint8_t BcdToUint8(uint8_t val) {
+    return val - 6 * (val >> 4);
+}
+
+uint8_t BcdToBin24Hour(uint8_t bcdHour) {
+    uint8_t hour;
+
+    if (bcdHour & 0x40) {
+        // 12 hour mode, convert to 24
+        int isPm = ((bcdHour & 0x20) != 0);
+
+        hour = BcdToUint8(bcdHour & 0x1f);
+
+        if (isPm) {
+           hour += 12;
+        }
+    } else {
+        hour = BcdToUint8(bcdHour);
+    }
+
+    return hour;
+}
 
 /* USER CODE END 0 */
 
@@ -746,27 +840,29 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	Display display;
-	DisplayController controller;
 	size_t n_places = 6;
-	Character c[6];
-	Dot d[6];
 
-	c[0] = CH_Y;
-	c[1] = CH_D;
-	c[2] = CH_U;
-	c[3] = CH_O;
-	c[4] = CH_L;
-	c[5] = CH_C;
-
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
-
-	DisplayCreate(&display, n_places);
-	DisplayControllerCreate(&controller, &hspi1, LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
+//	{
+//		/* Case 1 */
+//		Character c[n_places];
+//		Dot d[n_places];
+//
+//		c[0] = CH_Y;
+//		c[1] = CH_D;
+//		c[2] = CH_U;
+//		c[3] = CH_O;
+//		c[4] = CH_L;
+//		c[5] = CH_C;
+//
+//		d[0] = DOT_OBSCURE;
+//		d[1] = DOT_OBSCURE;
+//		d[2] = DOT_HIGHLIGHT;
+//		d[3] = DOT_OBSCURE;
+//		d[4] = DOT_HIGHLIGHT;
+//		d[5] = DOT_OBSCURE;
+//
+//		//DisplayWrite(&display, c, d, n_places);
+//	}
 
   /* USER CODE END 1 */
 
@@ -805,24 +901,29 @@ int main(void)
   HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
 
   uint8_t buf[20];
-  buf[0] = 0xD0;
-  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_Transmit(&hspi3, buf, 1, 100);
-  HAL_SPI_Receive(&hspi3, buf, 1, 100);
-  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET);
-
-  buf[0] = 0x00;
-  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
-  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
-  buf[1] = buf[0];
+//  buf[0] = 0xD0;
+//  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET);
+//  HAL_SPI_Transmit(&hspi3, buf, 1, 100);
+//  HAL_SPI_Receive(&hspi3, buf, 1, 100);
+//  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET);
+//
+//  buf[0] = 0x00;
+//  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
+//  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
+//  buf[1] = buf[0];
 
   ///
-  DisplayWrite(&display, c, d, n_places);
-  DisplayControllerSend(&controller, &display);
-  DisplayWriteStr(&display, "CLOUDY", n_places);
-  DisplayControllerSend(&controller, &display);
+	DisplayCreate(&display,
+				  n_places,
+				  &hspi1,
+				  LED_DATA_LATCH_GPIO_Port,
+				  LED_DATA_LATCH_Pin);
+
+//  DisplayControllerSend(&controller, &display);
+//  DisplayWriteStr(&display, "CLOUDY", n_places);
+//  DisplayControllerSend(&controller, &display);
 //  uint16_t aa_dma[7];
-	//memset(aa_dma, 0xFF, 14);
+//	//memset(aa_dma, 0xFF, 14);
 //  memset(aa_dma, 0b1, 14);
 //  aa_dma[0] = 0;
 //  aa_dma[1] = CH_A;
@@ -831,8 +932,8 @@ int main(void)
 //  aa_dma[4] = CH_D;
 //  aa_dma[5] = CH_E;
 //  aa_dma[6] = CH_F;
-
-
+//
+//
 //	HAL_SPI_Transmit(&hspi1, aa_dma, 7, 1000);
 //	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
 //	HAL_Delay(1);
@@ -850,24 +951,51 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  //HAL_Delay(1000);
+  Dot d[n_places];
+  d[0] = DOT_OBSCURE;
+  d[1] = DOT_OBSCURE;
+  d[2] = DOT_HIGHLIGHT;
+  d[3] = DOT_OBSCURE;
+  d[4] = DOT_HIGHLIGHT;
+  d[5] = DOT_OBSCURE;
+  DisplayWriteDots(&display, d, n_places);
+
   while (1)
   {
 
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-	  DisplayWriteStr(&display, "CLOUDY", n_places);
-	  DisplayControllerSend(&controller, &display);
+//	  DisplayWriteStr(&display, "CLOUDY", n_places);
+//	  HAL_Delay(1000);
+//
+//	  DisplayWriteStr(&display, "DOLLAR", n_places);
+//	  HAL_Delay(1000);
+//
+//	  DisplayWriteUint(&display, 0);
+//	  HAL_Delay(1000);
+//
+//	  DisplayWriteUint(&display, 123456);
+//	  HAL_Delay(1000);
+
+	  buf[0] = 0x00;
+	  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
+	  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
+
+	  //DisplayWriteUint(&display, i++);
+	  //DisplayWriteUint(&display, (buf[0] & 0b11110000) >> 4);
+	  //DisplayWriteUint(&display, (buf[0] & 0b00001111) >> 0);
+
+	  uint8_t s = ((buf[0] & 0b11110000) >> 4) * 10 + (buf[0] & 0b00001111) >> 0;
+	  uint8_t m = ((buf[1] & 0b11110000) >> 4) * 10 + (buf[1] & 0b00001111) >> 0;
+	  uint8_t h = BcdToBin24Hour(buf[2]);
+
+	  DisplayWriteUint(&display,
+			  h * 10000 + m * 100 + s);
+
 	  HAL_Delay(1000);
-	  DisplayWriteStr(&display, "DOLLAR", n_places);
-	  DisplayControllerSend(&controller, &display);
-	  HAL_Delay(1000);
-	  DisplayWriteUint(&display, 0);
-	  DisplayControllerSend(&controller, &display);
-	  HAL_Delay(1000);
-	  DisplayWriteUint(&display, 123456);
-	  DisplayControllerSend(&controller, &display);
-	  HAL_Delay(1000);
+
 //		c[0] = CH_D;
 //		c[1] = CH_U;
 //		c[2] = CH_O;
