@@ -4,52 +4,41 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * This notice applies to any and all portions of this file
+  ** This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
   * USER CODE END. Other portions of this file, whether 
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * Copyright (c) 2018 STMicroelectronics International N.V. 
-  * All rights reserved.
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
-  * Redistribution and use in source and binary forms, with or without 
-  * modification, are permitted, provided that the following conditions are met:
+  * Redistribution and use in source and binary forms, with or without modification,
+  * are permitted provided that the following conditions are met:
+  *   1. Redistributions of source code must retain the above copyright notice,
+  *      this list of conditions and the following disclaimer.
+  *   2. Redistributions in binary form must reproduce the above copyright notice,
+  *      this list of conditions and the following disclaimer in the documentation
+  *      and/or other materials provided with the distribution.
+  *   3. Neither the name of STMicroelectronics nor the names of its contributors
+  *      may be used to endorse or promote products derived from this software
+  *      without specific prior written permission.
   *
-  * 1. Redistribution of source code must retain the above copyright notice, 
-  *    this list of conditions and the following disclaimer.
-  * 2. Redistributions in binary form must reproduce the above copyright notice,
-  *    this list of conditions and the following disclaimer in the documentation
-  *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
-  *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
-  *    software, must execute solely and exclusively on microcontroller or
-  *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
-  *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
-  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
-#include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
@@ -62,14 +51,66 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdlib.h>
+
+#include "mb.h"
+#include "mbport.h"
+#include "mbutils.h"
+
+#include "ws2812.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define N_BITS_IN_BYTE 8
 
+uint32_t tt[1];
+uint32_t flag_adc_dma;
+
+
+/* ----------------------- Defines ------------------------------------------*/
+#define REG_INPUT_START                 ( 1 )
+#define REG_INPUT_NREGS                 ( 12 )
+
+#define REG_HOLDING_START               ( 1 )
+#define REG_HOLDING_NREGS               ( 14 )
+
+#define REG_HOLDING_STORE_START         ( 2001 )
+#define REG_HOLDING_STORE_NREGS         ( 22 )
+
+#define REG_HOLDING_PROTECT_START       ( 9991 )
+#define REG_HOLDING_PROTECT_NREGS       ( 1 )
+
+#define REG_COILS_START     1
+#define REG_COILS_SIZE      8
+
+#define REG_DISC_START     1
+#define REG_DISC_SIZE      8
+
+/* ----------------------- Static variables ---------------------------------*/
+static USHORT   usRegInputStart = REG_INPUT_START;
+static USHORT   usRegInputBuf[REG_INPUT_NREGS];
+
+static USHORT   usRegHoldingStart = REG_HOLDING_START;
+static USHORT   usRegHoldingBuf[REG_HOLDING_NREGS];
+
+static USHORT   usRegHoldingStoreStart = REG_HOLDING_STORE_START;
+static USHORT   usRegHoldingStoreBuf[REG_HOLDING_STORE_NREGS];
+
+static USHORT   usRegHoldingProtectStart = REG_HOLDING_PROTECT_START;
+static USHORT   usRegHoldingProtectBuf[REG_HOLDING_PROTECT_NREGS];
+
+static unsigned char ucRegCoilsBuf[REG_COILS_SIZE / 8];
+
+static unsigned char ucRegDiscBuf[REG_DISC_SIZE / 8] = { 0 };
+
+static uint32_t lock_nesting_count = 0;
+
+
+
+
+
+#define N_BITS_IN_BYTE 8
 
 
 #define A_SEGMENT  7
@@ -798,7 +839,6 @@ void DisplayWriteUint(Display *display,
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -806,6 +846,28 @@ void MX_FREERTOS_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+
+
+
+void __critical_enter( void )
+{
+	__disable_irq();
+	++lock_nesting_count;
+}
+
+void __critical_exit( void )
+{
+	/* Unlock interrupts only when we are exiting the outermost nested  call. */
+	--lock_nesting_count;
+	if (lock_nesting_count == 0) {
+		__enable_irq();
+	}
+}
+
+
+
+
+
 uint8_t BcdToUint8(uint8_t val) {
     return val - 6 * (val >> 4);
 }
@@ -839,6 +901,9 @@ uint8_t BcdToBin24Hour(uint8_t bcdHour) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
+	eMBErrorCode eStatus;
+
 	Display display;
 	size_t n_places = 6;
 
@@ -894,11 +959,35 @@ int main(void)
   MX_SPI3_Init();
   MX_USART3_UART_Init();
   MX_TIM5_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+
+
+
+  ws2812_init();
+  //HAL_Delay(1000);
+//  HAL_GPIO_WritePin(RGB_DATA_GPIO_Port, RGB_DATA_Pin, GPIO_PIN_RESET);
+  ws2812_pixel_rgb_to_buf_dma(127, 30, 0, 0);
+  ws2812_pixel_rgb_to_buf_dma(127, 33, 0, 1);
+  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*) &BUF_DMA,
+	ARRAY_LEN);
+
+
+  eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
+  eStatus = eMBEnable();
+
+
+
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_Delay(10);
+  HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+
 
   //HAL_TIM_Base_Start(&htim5);
   //HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+
+
 
   uint8_t buf[20];
 //  buf[0] = 0xD0;
@@ -939,15 +1028,14 @@ int main(void)
 //	HAL_Delay(1);
 //	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
 
+
+
+	flag_adc_dma = 0;
+	HAL_ADC_Start_DMA(&hadc1, tt, 1);
+
+
+
   /* USER CODE END 2 */
-
-  /* Call init function for freertos objects (in freertos.c) */
-  MX_FREERTOS_Init();
-
-  /* Start scheduler */
-  //osKernelStart();
-  
-  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -963,6 +1051,14 @@ int main(void)
 
   while (1)
   {
+		if ( flag_adc_dma == 1 ) {
+			flag_adc_dma = 0;
+			usRegInputBuf[0] = tt[0];
+			HAL_ADC_Start_DMA(&hadc1, tt, 1);
+//			DisplayWriteUint(&display, tt[0]);
+		}
+
+		eMBPoll();
 
   /* USER CODE END WHILE */
 
@@ -994,7 +1090,7 @@ int main(void)
 	  DisplayWriteUint(&display,
 			  h * 10000 + m * 100 + s);
 
-	  HAL_Delay(1000);
+	  HAL_Delay(10);
 
 //		c[0] = CH_D;
 //		c[1] = CH_U;
@@ -1060,9 +1156,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 72;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 3;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -1074,10 +1170,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -1091,10 +1187,207 @@ void SystemClock_Config(void)
   HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
 
   /* SysTick_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(SysTick_IRQn, 15, 0);
+  HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
 /* USER CODE BEGIN 4 */
+
+eMBErrorCode
+eMBRegInputCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs )
+{
+    eMBErrorCode    eStatus = MB_ENOERR;
+    int             iRegIndex;
+
+    if( ( usAddress >= REG_INPUT_START )
+        && ( usAddress + usNRegs <= REG_INPUT_START + REG_INPUT_NREGS ) )
+    {
+        iRegIndex = ( int )( usAddress - usRegInputStart );
+        while( usNRegs > 0 )
+        {
+            *pucRegBuffer++ =
+                ( unsigned char )( usRegInputBuf[iRegIndex] >> 8 );
+            *pucRegBuffer++ =
+                ( unsigned char )( usRegInputBuf[iRegIndex] & 0xFF );
+            iRegIndex++;
+            usNRegs--;
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
+}
+
+eMBErrorCode
+eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs,
+                 eMBRegisterMode eMode )
+{
+    eMBErrorCode    eStatus = MB_ENOERR;
+    int             iRegIndex;
+
+    if ( ( usAddress >= REG_HOLDING_START ) && ( usAddress + usNRegs <= REG_HOLDING_START + REG_HOLDING_NREGS ) )
+    {
+        iRegIndex = ( int )( usAddress - usRegHoldingStart );
+        switch ( eMode )
+        {
+        case MB_REG_READ:
+            while( usNRegs > 0 )
+            {
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingBuf[iRegIndex] >> 8 );
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingBuf[iRegIndex] & 0xFF );
+                iRegIndex++;
+                usNRegs--;
+            }
+            break;
+
+        case MB_REG_WRITE:
+            while( usNRegs > 0 )
+            {
+                usRegHoldingBuf[iRegIndex] = *pucRegBuffer++ << 8;
+                usRegHoldingBuf[iRegIndex] |= *pucRegBuffer++;
+                iRegIndex++;
+                usNRegs--;
+            }
+        }
+    }
+    else if ( ( usAddress >= REG_HOLDING_STORE_START ) && ( usAddress + usNRegs <= REG_HOLDING_STORE_START + REG_HOLDING_STORE_NREGS ) )
+    {
+        iRegIndex = ( int )( usAddress - usRegHoldingStoreStart );
+        switch ( eMode )
+        {
+        case MB_REG_READ:
+            while( usNRegs > 0 )
+            {
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingStoreBuf[iRegIndex] >> 8 );
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingStoreBuf[iRegIndex] & 0xFF );
+                iRegIndex++;
+                usNRegs--;
+            }
+            break;
+
+        case MB_REG_WRITE:
+            while( usNRegs > 0 )
+            {
+                usRegHoldingStoreBuf[iRegIndex] = *pucRegBuffer++ << 8;
+                usRegHoldingStoreBuf[iRegIndex] |= *pucRegBuffer++;
+                iRegIndex++;
+                usNRegs--;
+            }
+        }
+    }
+    else if ( ( usAddress >= REG_HOLDING_PROTECT_START ) && ( usAddress + usNRegs <= REG_HOLDING_PROTECT_START + REG_HOLDING_PROTECT_NREGS ) )
+    {
+        iRegIndex = ( int )( usAddress - usRegHoldingProtectStart );
+        switch ( eMode )
+        {
+        case MB_REG_READ:
+            while( usNRegs > 0 )
+            {
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingProtectBuf[iRegIndex] >> 8 );
+                *pucRegBuffer++ = ( unsigned char )( usRegHoldingProtectBuf[iRegIndex] & 0xFF );
+                iRegIndex++;
+                usNRegs--;
+            }
+            break;
+
+        case MB_REG_WRITE:
+            while( usNRegs > 0 )
+            {
+                usRegHoldingProtectBuf[iRegIndex] = *pucRegBuffer++ << 8;
+                usRegHoldingProtectBuf[iRegIndex] |= *pucRegBuffer++;
+                iRegIndex++;
+                usNRegs--;
+            }
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+    return eStatus;
+}
+
+
+eMBErrorCode
+eMBRegCoilsCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNCoils,
+               eMBRegisterMode eMode )
+{
+    eMBErrorCode    eStatus = MB_ENOERR;
+    int             iNCoils = ( int )usNCoils;
+    unsigned short  usBitOffset;
+
+    /* Check if we have registers mapped at this block. */
+    if( ( usAddress >= REG_COILS_START ) &&
+        ( usAddress + usNCoils <= REG_COILS_START + REG_COILS_SIZE ) )
+    {
+        usBitOffset = ( unsigned short )( usAddress - REG_COILS_START );
+        switch ( eMode )
+        {
+                /* Read current values and pass to protocol stack. */
+            case MB_REG_READ:
+                while( iNCoils > 0 )
+                {
+                    *pucRegBuffer++ =
+                        xMBUtilGetBits( ucRegCoilsBuf, usBitOffset,
+                                        ( unsigned char )( iNCoils >
+                                                           8 ? 8 :
+                                                           iNCoils ) );
+                    iNCoils -= 8;
+                    usBitOffset += 8;
+                }
+                break;
+
+                /* Update current register values. */
+            case MB_REG_WRITE:
+                while( iNCoils > 0 )
+                {
+                    xMBUtilSetBits( ucRegCoilsBuf, usBitOffset,
+                                    ( unsigned char )( iNCoils > 8 ? 8 : iNCoils ),
+                                    *pucRegBuffer++ );
+                    iNCoils -= 8;
+                    usBitOffset += 8;
+                }
+                break;
+        }
+
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+    return eStatus;
+}
+
+eMBErrorCode
+eMBRegDiscreteCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNDiscrete )
+{
+    eMBErrorCode    eStatus = MB_ENOERR;
+    short           iNDiscrete = ( short )usNDiscrete;
+    unsigned short  usBitOffset;
+
+    /* Check if we have registers mapped at this block. */
+    if( ( usAddress >= REG_DISC_START ) &&
+        ( usAddress + usNDiscrete <= REG_DISC_START + REG_DISC_SIZE ) )
+    {
+        usBitOffset = ( unsigned short )( usAddress - REG_DISC_START );
+        while( iNDiscrete > 0 )
+        {
+            *pucRegBuffer++ =
+                xMBUtilGetBits( ucRegDiscBuf, usBitOffset,
+                                ( unsigned char )( iNDiscrete >
+                                                   8 ? 8 : iNDiscrete ) );
+            iNDiscrete -= 8;
+            usBitOffset += 8;
+        }
+    }
+    else
+    {
+        eStatus = MB_ENOREG;
+    }
+    return eStatus;
+}
 
 /* USER CODE END 4 */
 

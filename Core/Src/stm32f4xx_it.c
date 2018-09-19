@@ -34,16 +34,44 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx.h"
 #include "stm32f4xx_it.h"
-#include "cmsis_os.h"
 
 /* USER CODE BEGIN 0 */
 extern uint16_t aa_dma[ 2 * 3 * 8 * 2 + 1 ];
 extern uint16_t ii;
+
+extern uint32_t flag_adc_dma;
+
+#include "port.h"
+extern UART_HandleTypeDef huart_m;
+
+void VIT_UART_IRQHandler(UART_HandleTypeDef *huart)
+{
+  uint32_t tmp_flag = 0, tmp_it_source = 0;
+
+  tmp_flag = __HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE);
+  tmp_it_source = __HAL_UART_GET_IT_SOURCE(huart, UART_IT_RXNE);
+  /* UART in mode Receiver ---------------------------------------------------*/
+  if((tmp_flag != RESET) && (tmp_it_source != RESET))
+  {
+    prvvUARTRxISR( );
+  }
+
+  tmp_flag = __HAL_UART_GET_FLAG(huart, UART_FLAG_TC);
+  tmp_it_source = __HAL_UART_GET_IT_SOURCE(huart, UART_IT_TC);
+  /* UART in mode Transmitter ------------------------------------------------*/
+  if((tmp_flag != RESET) && (tmp_it_source != RESET))
+  {
+    prvvUARTTxReadyISR( );
+  }
+}
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_tim2_up_ch3;
-extern TIM_HandleTypeDef htim2;
+extern DMA_HandleTypeDef hdma_adc1;
+extern DMA_HandleTypeDef hdma_tim2_ch1;
+extern TIM_HandleTypeDef htim7;
+extern UART_HandleTypeDef huart3;
 
 extern TIM_HandleTypeDef htim6;
 
@@ -137,6 +165,19 @@ void UsageFault_Handler(void)
 }
 
 /**
+* @brief This function handles System service call via SWI instruction.
+*/
+void SVC_Handler(void)
+{
+  /* USER CODE BEGIN SVCall_IRQn 0 */
+
+  /* USER CODE END SVCall_IRQn 0 */
+  /* USER CODE BEGIN SVCall_IRQn 1 */
+
+  /* USER CODE END SVCall_IRQn 1 */
+}
+
+/**
 * @brief This function handles Debug monitor.
 */
 void DebugMon_Handler(void)
@@ -150,6 +191,19 @@ void DebugMon_Handler(void)
 }
 
 /**
+* @brief This function handles Pendable request for system service.
+*/
+void PendSV_Handler(void)
+{
+  /* USER CODE BEGIN PendSV_IRQn 0 */
+
+  /* USER CODE END PendSV_IRQn 0 */
+  /* USER CODE BEGIN PendSV_IRQn 1 */
+
+  /* USER CODE END PendSV_IRQn 1 */
+}
+
+/**
 * @brief This function handles System tick timer.
 */
 void SysTick_Handler(void)
@@ -157,7 +211,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 0 */
 
   /* USER CODE END SysTick_IRQn 0 */
-  osSystickHandler();
+  HAL_SYSTICK_IRQHandler();
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
   /* USER CODE END SysTick_IRQn 1 */
@@ -171,33 +225,31 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-* @brief This function handles DMA1 stream1 global interrupt.
+* @brief This function handles DMA1 stream5 global interrupt.
 */
-void DMA1_Stream1_IRQHandler(void)
+void DMA1_Stream5_IRQHandler(void)
 {
-  /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 0 */
 
-  /* USER CODE END DMA1_Stream1_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_tim2_up_ch3);
-  /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
-//  HAL_GPIO_TogglePin( RGB_DATA_GPIO_Port, RGB_DATA_Pin );
-  __HAL_TIM_DISABLE_IT(&htim2, TIM_IT_CC3);
-  __HAL_TIM_DISABLE_IT(&htim2, TIM_IT_BREAK);
-  /* USER CODE END DMA1_Stream1_IRQn 1 */
+  /* USER CODE END DMA1_Stream5_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_tim2_ch1);
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream5_IRQn 1 */
 }
 
 /**
-* @brief This function handles TIM2 global interrupt.
+* @brief This function handles USART3 global interrupt.
 */
-void TIM2_IRQHandler(void)
+void USART3_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM2_IRQn 0 */
+  /* USER CODE BEGIN USART3_IRQn 0 */
+  VIT_UART_IRQHandler(&huart_m);
+  /* USER CODE END USART3_IRQn 0 */
+  HAL_UART_IRQHandler(&huart3);
+  /* USER CODE BEGIN USART3_IRQn 1 */
 
-  /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
-  /* USER CODE BEGIN TIM2_IRQn 1 */
-  HAL_GPIO_TogglePin( RGB_DATA_GPIO_Port, RGB_DATA_Pin );
-  /* USER CODE END TIM2_IRQn 1 */
+  /* USER CODE END USART3_IRQn 1 */
 }
 
 /**
@@ -212,6 +264,34 @@ void TIM6_DAC_IRQHandler(void)
   /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
 
   /* USER CODE END TIM6_DAC_IRQn 1 */
+}
+
+/**
+* @brief This function handles TIM7 global interrupt.
+*/
+void TIM7_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM7_IRQn 0 */
+  mb_TIM_PeriodElapsedCallback(&htim7);
+  /* USER CODE END TIM7_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim7);
+  /* USER CODE BEGIN TIM7_IRQn 1 */
+
+  /* USER CODE END TIM7_IRQn 1 */
+}
+
+/**
+* @brief This function handles DMA2 stream0 global interrupt.
+*/
+void DMA2_Stream0_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream0_IRQn 0 */
+  flag_adc_dma = 1;
+  /* USER CODE END DMA2_Stream0_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_adc1);
+  /* USER CODE BEGIN DMA2_Stream0_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream0_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
