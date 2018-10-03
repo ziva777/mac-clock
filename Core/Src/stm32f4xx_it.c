@@ -37,12 +37,14 @@
 #include "cmsis_os.h"
 
 /* USER CODE BEGIN 0 */
-extern uint16_t aa_dma[ 2 * 3 * 8 * 2 + 1 ];
-extern uint16_t ii;
+//extern uint16_t aa_dma[ 2 * 3 * 8 * 2 + 1 ];
+//extern uint16_t ii;
 
-extern uint32_t flag_adc_dma;
+//extern uint32_t flag_adc_dma;
 
 #include "port.h"
+#include "luminosity_sensor.h"
+
 extern UART_HandleTypeDef huart_m;
 
 void VIT_UART_IRQHandler(UART_HandleTypeDef *huart)
@@ -246,7 +248,8 @@ void TIM7_IRQHandler(void)
 void DMA2_Stream0_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA2_Stream0_IRQn 0 */
-  flag_adc_dma = 1;
+//  flag_adc_dma = 1;
+  LuminositySensorCommit(&luminosity_sensor);
   /* USER CODE END DMA2_Stream0_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_adc1);
   /* USER CODE BEGIN DMA2_Stream0_IRQn 1 */

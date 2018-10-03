@@ -67,7 +67,11 @@
 #include "mbport.h"
 #include "mbutils.h"
 
+#include "wire.h"
 #include "ws2812.h"
+#include "display.h"
+#include "rtc_ds3221.h"
+#include "luminosity_sensor.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -75,8 +79,8 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-uint32_t tt[1];
-uint32_t flag_adc_dma;
+//uint32_t tt[1];
+//uint32_t flag_adc_dma;
 
 
 /* ----------------------- Defines ------------------------------------------*/
@@ -116,734 +120,6 @@ static unsigned char ucRegCoilsBuf[REG_COILS_SIZE / 8];
 static unsigned char ucRegDiscBuf[REG_DISC_SIZE / 8] = { 0 };
 
 static uint32_t lock_nesting_count = 0;
-
-
-
-
-
-#define N_BITS_IN_BYTE 8
-
-
-#define A_SEGMENT  7
-#define B_SEGMENT  8
-#define C_SEGMENT 10
-#define D_SEGMENT 13
-#define E_SEGMENT 15
-#define F_SEGMENT 14
-#define G_SEGMENT  0
-#define H_SEGMENT  4
-
-#define K_SEGMENT  5
-#define M_SEGMENT  6
-#define N_SEGMENT  9
-
-#define U_SEGMENT  3
-#define P_SEGMENT 11
-
-#define T_SEGMENT  1
-#define S_SEGMENT  2
-#define R_SEGMENT 12
-
-
-#define POW2(a)         (1 << a)
-
-#define PASTE(a,b)      a ## b
-#define XPASTE(a,b)     PASTE(a,b)
-#define PP_NARG(...)    PP_NARG_(__VA_ARGS__, PP_RSEQ_N())
-#define PP_NARG_(...)   PP_ARG_N(__VA_ARGS__)
-
-#define PP_ARG_N( \
-        _1, _2, _3, _4, _5, _6, _7, _8, _9,_10,  \
-        _11,_12,_13,_14,_15,_16,_17,_18,_19,_20, \
-        _21,_22,_23,_24,_25,_26,_27,_28,_29,_30, \
-        _31,_32,_33,_34,_35,_36,_37,_38,_39,_40, \
-        _41,_42,_43,_44,_45,_46,_47,_48,_49,_50, \
-        _51,_52,_53,_54,_55,_56,_57,_58,_59,_60, \
-        _61,_62,_63,N,...) N
-
-#define PP_RSEQ_N() \
-        63,62,61,60,                   \
-        59,58,57,56,55,54,53,52,51,50, \
-        49,48,47,46,45,44,43,42,41,40, \
-        39,38,37,36,35,34,33,32,31,30, \
-        29,28,27,26,25,24,23,22,21,20, \
-        19,18,17,16,15,14,13,12,11,10, \
-        9,8,7,6,5,4,3,2,1,0
-
-#define  SEGMENTS1(a)                                               (POW2(a))
-#define  SEGMENTS2(a, b)                                            (SEGMENTS1(a) | SEGMENTS1(b))
-#define  SEGMENTS3(a, b, c)                                         (SEGMENTS1(a) | SEGMENTS2(b, c))
-#define  SEGMENTS4(a, b, c, d)                                      (SEGMENTS1(a) | SEGMENTS3(b, c, d))
-#define  SEGMENTS5(a, b, c, d, e)                                   (SEGMENTS1(a) | SEGMENTS4(b, c, d, e))
-#define  SEGMENTS6(a, b, c, d, e, f)                                (SEGMENTS1(a) | SEGMENTS5(b, c, d, e, f))
-#define  SEGMENTS7(a, b, c, d, e, f, g)                             (SEGMENTS1(a) | SEGMENTS6(b, c, d, e, f, g))
-#define  SEGMENTS8(a, b, c, d, e, f, g, h)                          (SEGMENTS1(a) | SEGMENTS7(b, c, d, e, f, g, h))
-#define  SEGMENTS9(a, b, c, d, e, f, g, h, i)                       (SEGMENTS1(a) | SEGMENTS8(b, c, d, e, f, g, h, i))
-#define SEGMENTS10(a, b, c, d, e, f, g, h, i, j)                    (SEGMENTS1(a) | SEGMENTS9(b, c, d, e, f, g, h, i, j))
-#define SEGMENTS11(a, b, c, d, e, f, g, h, i, j, k)                 (SEGMENTS1(a) | SEGMENTS10(b, c, d, e, f, g, h, i, j, k))
-#define SEGMENTS12(a, b, c, d, e, f, g, h, i, j, k, l)              (SEGMENTS1(a) | SEGMENTS11(b, c, d, e, f, g, h, i, j, k, l))
-#define SEGMENTS13(a, b, c, d, e, f, g, h, i, j, k, l, m)           (SEGMENTS1(a) | SEGMENTS12(b, c, d, e, f, g, h, i, j, k, l, m))
-#define SEGMENTS14(a, b, c, d, e, f, g, h, i, j, k, l, m, n)        (SEGMENTS1(a) | SEGMENTS13(b, c, d, e, f, g, h, i, j, k, l, m, n))
-#define SEGMENTS15(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)     (SEGMENTS1(a) | SEGMENTS14(b, c, d, e, f, g, h, i, j, k, l, m, n, o))
-#define SEGMENTS16(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)  (SEGMENTS1(a) | SEGMENTS15(b, c, d, e, f, g, h, i, j, k, l, m, n, o, p))
-
-#define SEGMENTS_(A, ...)    A(__VA_ARGS__)
-#define SEGMENTS(...)        SEGMENTS_(XPASTE(SEGMENTS, PP_NARG(__VA_ARGS__)), __VA_ARGS__)
-
-
-/*
- * Character
- */
-typedef enum {
-
-    CH_BLANK = 0,
-
-    CH_A = SEGMENTS(G_SEGMENT, H_SEGMENT, A_SEGMENT, B_SEGMENT, C_SEGMENT, D_SEGMENT, U_SEGMENT, P_SEGMENT),
-    CH_B = SEGMENTS(A_SEGMENT, B_SEGMENT, C_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT, M_SEGMENT, S_SEGMENT, P_SEGMENT),
-    CH_C = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT),
-    CH_D = SEGMENTS(A_SEGMENT, B_SEGMENT, C_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT, M_SEGMENT, S_SEGMENT),
-    CH_E = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, U_SEGMENT, P_SEGMENT),
-    CH_F = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, U_SEGMENT, P_SEGMENT),
-    CH_G = SEGMENTS(A_SEGMENT, B_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, D_SEGMENT, P_SEGMENT),
-    CH_H = SEGMENTS(H_SEGMENT, G_SEGMENT, D_SEGMENT, C_SEGMENT, U_SEGMENT, P_SEGMENT),
-    CH_I = SEGMENTS(A_SEGMENT, B_SEGMENT, F_SEGMENT, E_SEGMENT, M_SEGMENT, S_SEGMENT),
-    CH_J = SEGMENTS(C_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT, G_SEGMENT),
-    CH_K = SEGMENTS(H_SEGMENT, G_SEGMENT, U_SEGMENT, N_SEGMENT, R_SEGMENT),
-    CH_L = SEGMENTS(H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT),
-    CH_M = SEGMENTS(G_SEGMENT, H_SEGMENT, K_SEGMENT, N_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_N = SEGMENTS(G_SEGMENT, H_SEGMENT, K_SEGMENT, R_SEGMENT, D_SEGMENT, C_SEGMENT),
-    CH_O = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_P = SEGMENTS(G_SEGMENT, H_SEGMENT, A_SEGMENT, B_SEGMENT, C_SEGMENT, U_SEGMENT, P_SEGMENT),
-    CH_Q = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, C_SEGMENT, D_SEGMENT, R_SEGMENT),
-    CH_R = SEGMENTS(G_SEGMENT, H_SEGMENT, A_SEGMENT, B_SEGMENT, C_SEGMENT, U_SEGMENT, P_SEGMENT, R_SEGMENT),
-    CH_S = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT),
-    CH_T = SEGMENTS(A_SEGMENT, B_SEGMENT, M_SEGMENT, S_SEGMENT),
-    CH_U = SEGMENTS(H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_V = SEGMENTS(H_SEGMENT, G_SEGMENT, T_SEGMENT, N_SEGMENT),
-    CH_W = SEGMENTS(H_SEGMENT, G_SEGMENT, T_SEGMENT, R_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_X = SEGMENTS(K_SEGMENT, N_SEGMENT, T_SEGMENT, R_SEGMENT),
-    CH_Y = SEGMENTS(H_SEGMENT, U_SEGMENT, P_SEGMENT, F_SEGMENT, E_SEGMENT, D_SEGMENT, C_SEGMENT),
-    CH_Z = SEGMENTS(A_SEGMENT, B_SEGMENT, N_SEGMENT, T_SEGMENT, F_SEGMENT, E_SEGMENT),
-
-	CH_a = SEGMENTS(G_SEGMENT, U_SEGMENT, S_SEGMENT, F_SEGMENT, E_SEGMENT),
-	CH_b = SEGMENTS(G_SEGMENT, U_SEGMENT, S_SEGMENT, F_SEGMENT, H_SEGMENT),
-	CH_c = SEGMENTS(U_SEGMENT, G_SEGMENT, F_SEGMENT),
-	CH_d = SEGMENTS(S_SEGMENT, P_SEGMENT, E_SEGMENT, D_SEGMENT, C_SEGMENT),
-	CH_e = SEGMENTS(U_SEGMENT, G_SEGMENT, T_SEGMENT, F_SEGMENT),
-	CH_f = SEGMENTS(U_SEGMENT, P_SEGMENT, M_SEGMENT, S_SEGMENT, B_SEGMENT),
-	CH_g = SEGMENTS(H_SEGMENT, A_SEGMENT, M_SEGMENT, U_SEGMENT, S_SEGMENT, F_SEGMENT),
-	CH_h = SEGMENTS(H_SEGMENT, G_SEGMENT, U_SEGMENT, S_SEGMENT),
-	CH_i = SEGMENTS(S_SEGMENT),
-	CH_j = SEGMENTS(M_SEGMENT, S_SEGMENT, F_SEGMENT, G_SEGMENT),
-	CH_k = SEGMENTS(M_SEGMENT, S_SEGMENT, N_SEGMENT, R_SEGMENT),
-	CH_l = SEGMENTS(H_SEGMENT, G_SEGMENT),
-	CH_m = SEGMENTS(G_SEGMENT, U_SEGMENT, S_SEGMENT, P_SEGMENT, D_SEGMENT),
-	CH_n = SEGMENTS(G_SEGMENT, U_SEGMENT, S_SEGMENT),
-	CH_o = SEGMENTS(G_SEGMENT, U_SEGMENT, S_SEGMENT, F_SEGMENT),
-	CH_p = SEGMENTS(G_SEGMENT, H_SEGMENT, A_SEGMENT, M_SEGMENT, U_SEGMENT),
-	CH_q = SEGMENTS(S_SEGMENT, H_SEGMENT, A_SEGMENT, M_SEGMENT, U_SEGMENT),
-	CH_r = SEGMENTS(G_SEGMENT, U_SEGMENT),
-	CH_s = SEGMENTS(A_SEGMENT, H_SEGMENT, U_SEGMENT, S_SEGMENT, F_SEGMENT),
-	CH_t = SEGMENTS(H_SEGMENT, G_SEGMENT, U_SEGMENT, F_SEGMENT),
-	CH_u = SEGMENTS(G_SEGMENT, F_SEGMENT, S_SEGMENT),
-	CH_v = SEGMENTS(G_SEGMENT, T_SEGMENT),
-	CH_w = SEGMENTS(G_SEGMENT, T_SEGMENT, R_SEGMENT, D_SEGMENT),
-	CH_x = SEGMENTS(K_SEGMENT, T_SEGMENT, N_SEGMENT, R_SEGMENT),
-	CH_y = SEGMENTS(M_SEGMENT, P_SEGMENT, C_SEGMENT, D_SEGMENT, E_SEGMENT),
-	CH_z = SEGMENTS(U_SEGMENT, T_SEGMENT, F_SEGMENT),
-
-    CH_0 = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_1 = SEGMENTS(N_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_2 = SEGMENTS(A_SEGMENT, B_SEGMENT, C_SEGMENT, P_SEGMENT, U_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT),
-    CH_3 = SEGMENTS(A_SEGMENT, B_SEGMENT, C_SEGMENT, P_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT),
-    CH_4 = SEGMENTS(H_SEGMENT, U_SEGMENT, P_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_5 = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT),
-    CH_6 = SEGMENTS(A_SEGMENT, B_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, D_SEGMENT),
-    CH_7 = SEGMENTS(A_SEGMENT, B_SEGMENT, C_SEGMENT, D_SEGMENT),
-    CH_8 = SEGMENTS(A_SEGMENT, B_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, G_SEGMENT, F_SEGMENT, E_SEGMENT, D_SEGMENT, C_SEGMENT),
-    CH_9 = SEGMENTS(A_SEGMENT, B_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, F_SEGMENT, E_SEGMENT, D_SEGMENT, C_SEGMENT),
-
-	CH_EQ = SEGMENTS(U_SEGMENT, P_SEGMENT, F_SEGMENT, E_SEGMENT),
-	CH_NEQ = SEGMENTS(U_SEGMENT, P_SEGMENT, T_SEGMENT, N_SEGMENT),
-	CH_PLUS = SEGMENTS(U_SEGMENT, P_SEGMENT, M_SEGMENT, S_SEGMENT),
-	CH_MINUS = SEGMENTS(U_SEGMENT, P_SEGMENT),
-	CH_DIVISION = SEGMENTS(T_SEGMENT, N_SEGMENT),
-	CH_LESS = SEGMENTS(R_SEGMENT, N_SEGMENT),
-	CH_MORE = SEGMENTS(K_SEGMENT, T_SEGMENT),
-	CH_LESS_OR_EQ = SEGMENTS(R_SEGMENT, N_SEGMENT, U_SEGMENT),
-	CH_MORE_OR_EQ = SEGMENTS(K_SEGMENT, T_SEGMENT, P_SEGMENT),
-
-	CH_OPEN_ROUND_BRACKET = SEGMENTS(R_SEGMENT, N_SEGMENT),
-	CH_CLOSE_ROUND_BRACKET = SEGMENTS(K_SEGMENT, T_SEGMENT),
-	CH_OPEN_SQUARE_BRACKET = SEGMENTS(B_SEGMENT, M_SEGMENT, S_SEGMENT, E_SEGMENT),
-	CH_CLOSE_SQUARE_BRACKET = SEGMENTS(A_SEGMENT, M_SEGMENT, S_SEGMENT, F_SEGMENT),
-	CH_OPEN_CURLY_BRACKET = SEGMENTS(B_SEGMENT, M_SEGMENT, S_SEGMENT, E_SEGMENT, U_SEGMENT),
-	CH_CLOSE_CURLY_BRACKET = SEGMENTS(A_SEGMENT, M_SEGMENT, S_SEGMENT, F_SEGMENT, P_SEGMENT),
-	CH_APOSTROPHE = SEGMENTS(M_SEGMENT),
-	CH_QUOTE = SEGMENTS(M_SEGMENT, C_SEGMENT),
-	CH_ASTERISK = SEGMENTS(K_SEGMENT, M_SEGMENT, N_SEGMENT, P_SEGMENT, R_SEGMENT, S_SEGMENT, T_SEGMENT, U_SEGMENT),
-	CH_NUMBER = SEGMENTS(M_SEGMENT, C_SEGMENT, U_SEGMENT, F_SEGMENT, S_SEGMENT, D_SEGMENT, P_SEGMENT, E_SEGMENT),
-	CH_DOLLAR = SEGMENTS(B_SEGMENT, A_SEGMENT, H_SEGMENT, U_SEGMENT, P_SEGMENT, D_SEGMENT, E_SEGMENT, F_SEGMENT, M_SEGMENT, S_SEGMENT),
-	CH_PERSENT = SEGMENTS(T_SEGMENT, N_SEGMENT, M_SEGMENT, S_SEGMENT, A_SEGMENT, H_SEGMENT, E_SEGMENT, D_SEGMENT, U_SEGMENT, P_SEGMENT),
-	CH_AMP = SEGMENTS(K_SEGMENT, A_SEGMENT, M_SEGMENT, R_SEGMENT, E_SEGMENT, U_SEGMENT, G_SEGMENT, F_SEGMENT),
-	CH_COMMA = SEGMENTS(T_SEGMENT),
-	CH_BROKEN_BAR = SEGMENTS(M_SEGMENT, S_SEGMENT),
-	CH_UNDERSCORE = SEGMENTS(F_SEGMENT, E_SEGMENT),
-
-    N_CHARS
-} Character;
-
-Character AsciiToCharacter(char c)
-{
-	Character ch;
-
-	switch (c) {
-	case 'A':
-		ch = CH_A;
-		break;
-	case 'B':
-		ch = CH_B;
-		break;
-	case 'C':
-		ch = CH_C;
-		break;
-	case 'D':
-		ch = CH_D;
-		break;
-	case 'E':
-		ch = CH_E;
-		break;
-	case 'F':
-		ch = CH_F;
-		break;
-	case 'G':
-		ch = CH_G;
-		break;
-	case 'H':
-		ch = CH_H;
-		break;
-	case 'I':
-		ch = CH_I;
-		break;
-	case 'J':
-		ch = CH_J;
-		break;
-	case 'K':
-		ch = CH_K;
-		break;
-	case 'L':
-		ch = CH_L;
-		break;
-	case 'M':
-		ch = CH_M;
-		break;
-	case 'N':
-		ch = CH_N;
-		break;
-	case 'O':
-		ch = CH_O;
-		break;
-	case 'P':
-		ch = CH_P;
-		break;
-	case 'Q':
-		ch = CH_Q;
-		break;
-	case 'R':
-		ch = CH_R;
-		break;
-	case 'S':
-		ch = CH_S;
-		break;
-	case 'T':
-		ch = CH_T;
-		break;
-	case 'U':
-		ch = CH_U;
-		break;
-	case 'V':
-		ch = CH_V;
-		break;
-	case 'W':
-		ch = CH_W;
-		break;
-	case 'X':
-		ch = CH_X;
-		break;
-	case 'Y':
-		ch = CH_Y;
-		break;
-	case 'Z':
-		ch = CH_Z;
-		break;
-
-	case 'a':
-		ch = CH_a;
-		break;
-	case 'b':
-		ch = CH_b;
-		break;
-	case 'c':
-		ch = CH_c;
-		break;
-	case 'd':
-		ch = CH_d;
-		break;
-	case 'e':
-		ch = CH_e;
-		break;
-	case 'f':
-		ch = CH_f;
-		break;
-	case 'g':
-		ch = CH_g;
-		break;
-	case 'h':
-		ch = CH_h;
-		break;
-	case 'i':
-		ch = CH_i;
-		break;
-	case 'j':
-		ch = CH_j;
-		break;
-	case 'k':
-		ch = CH_k;
-		break;
-	case 'l':
-		ch = CH_l;
-		break;
-	case 'm':
-		ch = CH_m;
-		break;
-	case 'n':
-		ch = CH_n;
-		break;
-	case 'o':
-		ch = CH_o;
-		break;
-	case 'p':
-		ch = CH_p;
-		break;
-	case 'q':
-		ch = CH_q;
-		break;
-	case 'r':
-		ch = CH_r;
-		break;
-	case 's':
-		ch = CH_s;
-		break;
-	case 't':
-		ch = CH_t;
-		break;
-	case 'u':
-		ch = CH_u;
-		break;
-	case 'v':
-		ch = CH_v;
-		break;
-	case 'w':
-		ch = CH_w;
-		break;
-	case 'x':
-		ch = CH_x;
-		break;
-	case 'y':
-		ch = CH_y;
-		break;
-	case 'z':
-		ch = CH_z;
-		break;
-
-	case '0':
-		ch = CH_0;
-		break;
-	case '1':
-		ch = CH_1;
-		break;
-	case '2':
-		ch = CH_2;
-		break;
-	case '3':
-		ch = CH_3;
-		break;
-	case '4':
-		ch = CH_4;
-		break;
-	case '5':
-		ch = CH_5;
-		break;
-	case '6':
-		ch = CH_6;
-		break;
-	case '7':
-		ch = CH_7;
-		break;
-	case '8':
-		ch = CH_8;
-		break;
-	case '9':
-		ch = CH_9;
-		break;
-
-	case ' ':
-		ch = CH_BLANK;
-		break;
-	case '=':
-		ch = CH_EQ;
-		break;
-	case '+':
-		ch = CH_PLUS;
-		break;
-	case '-':
-		ch = CH_MINUS;
-		break;
-	case '/':
-		ch = CH_DIVISION;
-		break;
-	case '<':
-		ch = CH_LESS;
-		break;
-	case '>':
-		ch = CH_MORE;
-		break;
-
-	case '(':
-		ch = CH_OPEN_ROUND_BRACKET;
-		break;
-	case ')':
-		ch = CH_CLOSE_ROUND_BRACKET;
-		break;
-	case '[':
-		ch = CH_OPEN_SQUARE_BRACKET;
-		break;
-	case ']':
-		ch = CH_CLOSE_SQUARE_BRACKET;
-		break;
-	case '{':
-		ch = CH_OPEN_CURLY_BRACKET;
-		break;
-	case '}':
-		ch = CH_CLOSE_CURLY_BRACKET;
-		break;
-
-	case '\'':
-		ch = CH_APOSTROPHE;
-		break;
-	case '"':
-		ch = CH_QUOTE;
-		break;
-	case '#':
-		ch = CH_NUMBER;
-		break;
-	case '$':
-		ch = CH_DOLLAR;
-		break;
-	case '%':
-		ch = CH_PERSENT;
-		break;
-	case '&':
-		ch = CH_AMP;
-		break;
-	case ',':
-	case '.':
-		ch = CH_COMMA;
-		break;
-	case '|':
-		ch = CH_BROKEN_BAR;
-		break;
-	case '_':
-		ch = CH_UNDERSCORE;
-		break;
-
-	default:
-		ch = CH_ASTERISK;
-		break;
-	}
-
-	return ch;
-}
-/* */
-
-
-/*
- * Dot
- */
-typedef enum {
-    DOT_OBSCURE = 0,
-	DOT_HIGHLIGHT = 1
-} Dot;
-/* */
-
-
-/*
- * DisplayBuffer
- * Internal buffer for Display to holding raw bits.
- */
-typedef struct {
-    void *buffer;				/* Raw buffer */
-
-    size_t logical_size; 		/* number of places */
-    size_t buffer_size; 		/* buffer size in bytes */
-
-    size_t symbols_buffer_size; /* symbols chunk size in 16bits */
-    size_t dots_buffer_size;	/* dots chunk size in 16bits */
-} DisplayBuffer;
-
-// decl
-
-void DisplayBufferCreate(DisplayBuffer *buffer,
-                   		 size_t logical_size);
-
-void DisplayBufferDispose(DisplayBuffer *buffer);
-
-void DisplayBufferWrite(DisplayBuffer *buffer,
-                  		Character str[],
-                  		Dot dot[],
-                  		size_t logical_size);
-
-void DisplayBufferWriteDots(DisplayBuffer *buffer,
-							Dot dot[],
-							size_t logical_size);
-
-void DisplayBufferWriteCharacters(DisplayBuffer *buffer,
-							 	  Character str[],
-							 	  size_t logical_size);
-
-// impl
-
-void DisplayBufferCreate(DisplayBuffer *buffer,
-                   		 size_t logical_size)
-{
-	/* DisplayBuffer buffer structure:
-	 *  symbols            dots
-	 * |5|4|3|2|1|0| xxxx |0|1|2|3|4|5|
-	 * N ............................ 0
-	 * */
-
-	buffer->logical_size = logical_size;
-	buffer->symbols_buffer_size = logical_size;
-	buffer->dots_buffer_size = (logical_size / (sizeof(uint16_t) * N_BITS_IN_BYTE) + 1);
-	buffer->buffer_size = (buffer->symbols_buffer_size + buffer->dots_buffer_size) * sizeof(uint16_t);
-    buffer->buffer = malloc(buffer->buffer_size);
-
-    memset(buffer->buffer, 0, buffer->buffer_size);
-}
-
-void DisplayBufferDispose(DisplayBuffer *buffer)
-{
-    buffer->logical_size = 0;
-    buffer->symbols_buffer_size = 0;
-    buffer->dots_buffer_size = 0;
-    buffer->buffer_size = 0;
-
-    free(buffer->buffer);
-}
-
-void DisplayBufferWrite(DisplayBuffer *buffer,
-                  		Character str[],
-                  		Dot dot[],
-                  		size_t logical_size)
-{
-	DisplayBufferWriteDots(buffer, dot, logical_size);
-	DisplayBufferWriteCharacters(buffer, str, logical_size);
-}
-
-void DisplayBufferWriteDots(DisplayBuffer *buffer,
-							Dot dot[],
-							size_t logical_size)
-{
-	size_t dot_buff_size = (logical_size / N_BITS_IN_BYTE) + 1;
-	uint8_t *dot_buff = malloc(dot_buff_size);
-	size_t k, l;
-
-	/* Dots buffer */
-	memset(dot_buff, 0, dot_buff_size);
-
-	for (size_t i = 0, j = logical_size-1;
-		 i != logical_size; ++i, --j)
-	{
-		k = i / 8;
-		l = i % 8;
-
-		if (dot[j] == DOT_HIGHLIGHT) {
-			dot_buff[k] |= POW2(l);
-		}
-	}
-
-	memcpy(buffer->buffer, dot_buff, dot_buff_size);
-	free(dot_buff);
-}
-
-void DisplayBufferWriteCharacters(DisplayBuffer *buffer,
-							 	  Character str[],
-							 	  size_t logical_size)
-{
-	/* Symbol buffer */
-	for (size_t i = buffer->dots_buffer_size;
-		 i != logical_size + buffer->dots_buffer_size;
-		 ++i)
-	{
-		((uint16_t *)buffer->buffer)[i] = str[i-buffer->dots_buffer_size];
-	}
-}
-/* */
-
-
-/*
- * Display controller
- * Module to display 18 segment LED
- */
-typedef struct {
-	SPI_HandleTypeDef *hspi;
-	GPIO_TypeDef *port;
-	uint16_t pin;
-	uint32_t transmit_timeout;
-
-	DisplayBuffer display_buffer;
-} Display;
-
-// decl
-
-void DisplayCreate(Display *display,
-				   size_t n_places,
-				   SPI_HandleTypeDef *hspi,
-				   GPIO_TypeDef *port,
-				   uint16_t pin);
-
-void DisplayDispose(Display *display);
-
-void DisplayWrite(Display *display,
-				  Character str[],
-                  Dot dot[],
-                  size_t n);
-
-void DisplayWriteCharacters(Display *display,
-							Character str[],
-							size_t n);
-
-void DisplayWriteDots(Display *display,
-					  Dot dot[],
-					  size_t n);
-
-void DisplayWriteStr(Display *display,
-					 const char *str,
-					 size_t n);
-
-void DisplayWriteUint(Display *display,
-					  uint32_t value);
-
-// impl
-
-HAL_StatusTypeDef DisplaySend(Display *display);
-
-void DisplayCreate(Display *display,
-				   size_t n_places,
-				   SPI_HandleTypeDef *hspi,
-				   GPIO_TypeDef *port,
-				   uint16_t pin)
-{
-	display->hspi = hspi;
-	display->port = port;
-	display->pin = pin;
-	display->transmit_timeout = 1000;
-
-	DisplayBufferCreate(&(display->display_buffer), n_places);
-	DisplaySend(display);
-}
-
-void DisplayDispose(Display *display)
-{
-	DisplayBufferDispose(&display->display_buffer);
-}
-
-HAL_StatusTypeDef DisplaySend(Display *display)
-{
-	HAL_StatusTypeDef ret;
-
-	/* Sending */
-	ret = HAL_SPI_Transmit(&hspi1,
-						   display->display_buffer.buffer,
-						   display->display_buffer.buffer_size / sizeof(uint16_t),
-						   display->transmit_timeout);
-	HAL_GPIO_TogglePin(display->port, display->pin);
-	HAL_Delay(1);
-	HAL_GPIO_TogglePin(display->port, display->pin);
-
-//		HAL_SPI_Transmit(&hspi1, display->display_buffer.display_buffer, 7, 1000);
-//		HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-//		HAL_Delay(1);
-//		HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-
-	return ret;
-}
-
-void DisplayWrite(Display *display,
-				  Character str[],
-                  Dot dot[],
-                  size_t n)
-{
-	DisplayBufferWrite(&display->display_buffer, str, dot, n);
-	DisplaySend(display);
-}
-
-void DisplayWriteCharacters(Display *display,
-							 Character str[],
-							 size_t n)
-{
-	DisplayBufferWriteCharacters(&display->display_buffer, str, n);
-	DisplaySend(display);
-}
-
-void DisplayWriteDots(Display *display,
-					  Dot dot[],
-					  size_t n)
-{
-	DisplayBufferWriteDots(&display->display_buffer, dot, n);
-	DisplaySend(display);
-}
-
-void DisplayWriteStr(Display *display,
-					 const char *str,
-					 size_t n)
-{
-	Character c[n];
-
-	for (size_t i = 0, j = n-1; i != n; ++i, --j) {
-		c[j] = AsciiToCharacter(str[i]);
-	}
-
-	DisplayBufferWriteCharacters(&display->display_buffer, c, n);
-	DisplaySend(display);
-}
-
-void DisplayWriteUint(Display *display,
-					  uint32_t value)
-{
-	Character c[display->display_buffer.logical_size];
-
-	memset(c, CH_BLANK, sizeof(c));
-
-	if (value) {
-		uint8_t d;
-		size_t i = 0;
-
-		while (value) {
-			d = value % 10;
-			c[i] = AsciiToCharacter(d + '0');
-			value /= 10;
-			++i;
-
-		}
-	} else {
-		c[0] = CH_0;
-	}
-
-	DisplayBufferWriteCharacters(&display->display_buffer, c, display->display_buffer.logical_size);
-	DisplaySend(display);
-}
-/* */
 
 
 /* USER CODE END PV */
@@ -903,6 +179,295 @@ uint8_t BcdToBin24Hour(uint8_t bcdHour) {
     return hour;
 }
 
+typedef enum {
+    BTN_UP = GPIO_PIN_SET,
+    BTN_DOWN = GPIO_PIN_RESET
+} BTN_STATES;
+
+#define BTN1_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN0_GPIO_Port, BTN0_Pin)
+#define BTN2_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN1_GPIO_Port, BTN1_Pin)
+#define BTN3_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN2_GPIO_Port, BTN2_Pin)
+#define BTN4_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN3_GPIO_Port, BTN3_Pin)
+#define BTN5_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN4_GPIO_Port, BTN4_Pin)
+#define BTN6_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN5_GPIO_Port, BTN5_Pin)
+#define BTN7_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN6_GPIO_Port, BTN6_Pin)
+#define BTN8_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN7_GPIO_Port, BTN7_Pin)
+
+static void SetBrightness(uint16_t br)
+{
+    htim5.Instance->CCR4 = br;
+    HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+}
+
+//static uint32_t GetLuminosity()
+//{
+////	uint32_t tt[1];
+////	uint32_t flag_adc_dma;
+//}
+/* Бип */
+void Beep()
+{
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+	HAL_Delay(10);
+	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+}
+
+/* Отобразить чч.мм.сс */
+void Display_A1_1(Display *display,
+				  Timestamp *ts)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	uint8_t h1, h2;
+	uint8_t m1, m2;
+	uint8_t s1, s2;
+
+	h1 = ts->hour / 10;
+	h2 = ts->hour % 10;
+	h1 += 0x30;
+	h2 += 0x30;
+	c[4] = AsciiToCharacter((char) h2);
+
+	if (h1 != 0x30)
+		c[5] = AsciiToCharacter((char) h1);
+	else
+		c[5] = CH_BLANK;
+
+	m1 = ts->min / 10;
+	m2 = ts->min % 10;
+	m1 += 0x30;
+	m2 += 0x30;
+	c[2] = AsciiToCharacter((char) m2);
+	c[3] = AsciiToCharacter((char) m1);
+
+	s1 = ts->sec / 10;
+	s2 = ts->sec % 10;
+	s1 += 0x30;
+	s2 += 0x30;
+	c[0] = AsciiToCharacter((char) s2);
+	c[1] = AsciiToCharacter((char) s1);
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_HIGHLIGHT;
+	d[5] = DOT_OBSCURE;
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Отобразить чч.мм с мигающим индикатором */
+void Display_A1_2(Display *display,
+				  Timestamp *ts)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	uint8_t h1, h2;
+	uint8_t m1, m2;
+
+	h1 = ts->hour / 10;
+	h2 = ts->hour % 10;
+	h1 += 0x30;
+	h2 += 0x30;
+
+	c[4 - 1] = AsciiToCharacter((char) h2);
+
+	if (h1 != 0x30)
+		c[5 - 1] = AsciiToCharacter((char) h1);
+	else
+		c[5 - 1] = CH_BLANK;
+
+	m1 = ts->min / 10;
+	m2 = ts->min % 10;
+	m1 += 0x30;
+	m2 += 0x30;
+	c[2 - 1] = AsciiToCharacter((char) m2);
+	c[3 - 1] = AsciiToCharacter((char) m1);
+
+	c[0] = AsciiToCharacter((char) ' ');
+	c[5] = AsciiToCharacter((char) ' ');
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_OBSCURE;
+	d[3] = (ts->sec % 2 == 0 ? DOT_HIGHLIGHT : DOT_OBSCURE);
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Отобразить дд.ММ.гг */
+void Display_A1_3(Display *display,
+				  Timestamp *ts)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	uint8_t h1, h2;
+	uint8_t m1, m2;
+	uint8_t s1, s2;
+
+	h1 = ts->mday / 10;
+	h2 = ts->mday % 10;
+	h1 += 0x30;
+	h2 += 0x30;
+	c[4] = AsciiToCharacter((char) h2);
+
+	if (h1 != 0x30)
+		c[5] = AsciiToCharacter((char) h1);
+	else
+		c[5] = CH_BLANK;
+
+	m1 = ts->mon / 10;
+	m2 = ts->mon % 10;
+	m1 += 0x30;
+	m2 += 0x30;
+	c[2] = AsciiToCharacter((char) m2);
+	c[3] = AsciiToCharacter((char) m1);
+
+	s1 = (ts->year % 100) / 10;
+	s2 = (ts->year % 100) % 10;
+	s1 += 0x30;
+	s2 += 0x30;
+	c[0] = AsciiToCharacter((char) s2);
+	c[1] = AsciiToCharacter((char) s1);
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_HIGHLIGHT;
+	d[5] = DOT_OBSCURE;
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Отобразить чередование чч.мм.сс и дд.ММ.гг */
+void Display_A1_4(Display *display,
+				  Timestamp *ts)
+{
+	static int flip_flop = 0;
+	static int counter = 0;
+	static const int counter_max = 5;
+	static int sec_prev = 0;
+
+	if (sec_prev != ts->sec) {
+		sec_prev = ts->sec;
+
+		if (++counter == counter_max) {
+			counter = 0;
+			++flip_flop;
+		}
+
+		if (flip_flop % 2) {
+			Display_A1_1(display, ts);
+		} else {
+			Display_A1_3(display, ts);
+		}
+	}
+}
+
+/* Отобразить чередование чч.мм и дд.ММ.гг */
+void Display_A1_5(Display *display,
+				  Timestamp *ts)
+{
+	static int flip_flop = 0;
+	static int counter = 0;
+	static const int counter_max = 5;
+	static int sec_prev = 0;
+
+	if (sec_prev != ts->sec) {
+		sec_prev = ts->sec;
+
+		if (++counter == counter_max) {
+			counter = 0;
+			++flip_flop;
+		}
+
+		if (flip_flop % 2) {
+			Display_A1_2(display, ts);
+		} else {
+			Display_A1_3(display, ts);
+		}
+	}
+}
+
+/* Редактировать время в формате чч.мм.сс */
+void Display_EditTime1(Display *display,
+				  	   Timestamp *ts)
+{
+	Display_A1_1(display, ts);
+}
+
+/* Редактировать время в формате чч.мм */
+void Display_EditTime2(Display *display,
+				  	   Timestamp *ts)
+{
+	Display_A1_2(display, ts);
+}
+
+/* Отобразить параметр точной настройки */
+void Display_EditAging(Display *display,
+					   int8_t aging)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_OBSCURE;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_HIGHLIGHT;
+	d[5] = DOT_OBSCURE;
+
+	c[5] = CH_A;
+	c[4] = CH_G;
+	c[3] = CH_BLANK;
+
+	if (aging < 0) {
+		c[3] = CH_MINUS;
+		aging = abs(aging);
+	}
+
+	c[2] = AsciiToCharacter((aging / 100) % 10 + 0x30);
+	c[1] = AsciiToCharacter((aging / 10) % 10 + 0x30);
+	c[0] = AsciiToCharacter((aging / 1) % 10 + 0x30);
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Редактировать дату */
+void Display_EditDate(Display *display,
+				  	  Timestamp *ts)
+{
+	Display_A1_3(display, ts);
+}
+
+typedef enum {
+	DISPLAY_MODE_A1_1,
+	DISPLAY_MODE_A1_2,
+	DISPLAY_MODE_A1_3,
+	DISPLAY_MODE_A1_4,
+	DISPLAY_MODE_A1_5,
+
+	DISPLAY_MODE_EDIT_TIME_1,
+	DISPLAY_MODE_EDIT_TIME_2,
+	DISPLAY_MODE_EDIT_AGING,
+	DISPLAY_MODE_EDIT_DATE
+} DISPLAY_MODES;
+
 /* USER CODE END 0 */
 
 /**
@@ -915,31 +480,11 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
 	eMBErrorCode eStatus;
+	DISPLAY_MODES display_mode_curr = DISPLAY_MODE_A1_1;
+	DISPLAY_MODES display_mode_prev = display_mode_curr;
 
 	Display display;
 	size_t n_places = 6;
-
-//	{
-//		/* Case 1 */
-//		Character c[n_places];
-//		Dot d[n_places];
-//
-//		c[0] = CH_Y;
-//		c[1] = CH_D;
-//		c[2] = CH_U;
-//		c[3] = CH_O;
-//		c[4] = CH_L;
-//		c[5] = CH_C;
-//
-//		d[0] = DOT_OBSCURE;
-//		d[1] = DOT_OBSCURE;
-//		d[2] = DOT_HIGHLIGHT;
-//		d[3] = DOT_OBSCURE;
-//		d[4] = DOT_HIGHLIGHT;
-//		d[5] = DOT_OBSCURE;
-//
-//		//DisplayWrite(&display, c, d, n_places);
-//	}
 
   /* USER CODE END 1 */
 
@@ -975,14 +520,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-
-  ws2812_init();
-  //HAL_Delay(1000);
+//  ws2812_init();
+//  HAL_Delay(1000);
 //  HAL_GPIO_WritePin(RGB_DATA_GPIO_Port, RGB_DATA_Pin, GPIO_PIN_RESET);
-  ws2812_pixel_rgb_to_buf_dma(127, 30, 0, 0);
-  ws2812_pixel_rgb_to_buf_dma(127, 33, 0, 1);
-  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*) &BUF_DMA,
-	ARRAY_LEN);
+//  ws2812_pixel_rgb_to_buf_dma(127, 30, 0, 0);
+//  ws2812_pixel_rgb_to_buf_dma(244, 152, 66, 0);
+//  ws2812_pixel_rgb_to_buf_dma(127, 33, 0, 1);
+//  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*) &BUF_DMA, ARRAY_LEN);
 
 
   eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
@@ -995,13 +539,15 @@ int main(void)
   HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
 
 
-  //HAL_TIM_Base_Start(&htim5);
-  //HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_Base_Start(&htim5);
   HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
 
 
+  Wire_SetI2C(&hi2c1);
+  Rtc_DS3231_init(DS3231_INTCN);
+  Timestamp ts;
 
-  uint8_t buf[20];
+//  uint8_t buf[20];
 //  buf[0] = 0xD0;
 //  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET);
 //  HAL_SPI_Transmit(&hspi3, buf, 1, 100);
@@ -1013,28 +559,12 @@ int main(void)
 //  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
 //  buf[1] = buf[0];
 
-  ///
 	DisplayCreate(&display,
 				  n_places,
 				  &hspi1,
 				  LED_DATA_LATCH_GPIO_Port,
 				  LED_DATA_LATCH_Pin);
 
-//  DisplayControllerSend(&controller, &display);
-//  DisplayWriteStr(&display, "CLOUDY", n_places);
-//  DisplayControllerSend(&controller, &display);
-//  uint16_t aa_dma[7];
-//	//memset(aa_dma, 0xFF, 14);
-//  memset(aa_dma, 0b1, 14);
-//  aa_dma[0] = 0;
-//  aa_dma[1] = CH_A;
-//  aa_dma[2] = CH_B;
-//  aa_dma[3] = CH_C;
-//  aa_dma[4] = CH_D;
-//  aa_dma[5] = CH_E;
-//  aa_dma[6] = CH_F;
-//
-//
 //	HAL_SPI_Transmit(&hspi1, aa_dma, 7, 1000);
 //	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
 //	HAL_Delay(1);
@@ -1042,10 +572,12 @@ int main(void)
 
 
 
-	flag_adc_dma = 0;
-	HAL_ADC_Start_DMA(&hadc1, tt, 1);
+//	flag_adc_dma = 0;
+//	HAL_ADC_Start_DMA(&hadc1, tt, 1);
 
-
+	LuminositySensorCreate(&luminosity_sensor);
+	LuminositySensorBegin(&luminosity_sensor);
+	HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
 
   /* USER CODE END 2 */
 
@@ -1059,30 +591,385 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  //HAL_Delay(1000);
-  Dot d[n_places];
-  d[0] = DOT_OBSCURE;
-  d[1] = DOT_OBSCURE;
-  d[2] = DOT_HIGHLIGHT;
-  d[3] = DOT_OBSCURE;
-  d[4] = DOT_HIGHLIGHT;
-  d[5] = DOT_OBSCURE;
-  DisplayWriteDots(&display, d, n_places);
+	const uint32_t cycle_delay = 10u;
+	const uint32_t btn_repeat_delay = 1000u;
+	const uint32_t btn_fast_repeat_delay = 850u;
+
+    int update_time = 0;
+    int update_aging = 0;
+
+    int8_t aging = Rtc_DS3231_get_aging();
+    uint8_t brightness = 200u;
+
+    uint32_t btn6_pressed_counter = 0;
+	uint32_t btn7_pressed_counter = 0;
+	uint32_t btn8_pressed_counter = 0;
+
+	BTN_STATES btn1_state_curr = BTN1_STATE();
+	BTN_STATES btn2_state_curr = BTN2_STATE();
+	BTN_STATES btn6_state_curr = BTN6_STATE();
+	BTN_STATES btn7_state_curr = BTN7_STATE();
+	BTN_STATES btn8_state_curr = BTN8_STATE();
+
+	BTN_STATES btn1_state_prev = btn1_state_curr;
+	BTN_STATES btn2_state_prev = btn2_state_curr;
+	BTN_STATES btn6_state_prev = btn6_state_curr;
+	BTN_STATES btn7_state_prev = btn7_state_curr;
+	BTN_STATES btn8_state_prev = btn8_state_curr;
+
+	SetBrightness(brightness);
 
   while (1)
   {
-		if ( flag_adc_dma == 1 ) {
-			flag_adc_dma = 0;
-			usRegInputBuf[0] = tt[0];
-			HAL_ADC_Start_DMA(&hadc1, tt, 1);
-//			DisplayWriteUint(&display, tt[0]);
-		}
+//		if ( flag_adc_dma == 1 ) {
+//			flag_adc_dma = 0;
+//			usRegInputBuf[0] = tt[0];
+//			HAL_ADC_Start_DMA(&hadc1, tt, 1);
+////			DisplayWriteUint(&display, tt[0]);
+//		}
+
+//	  while (1) {
+//		if (LuminositySensorIsReady(&luminosity_sensor)) {
+//			uint32_t tt = luminosity_sensor.value[0];
+//
+//			DisplayWriteUint(&display, tt);
+//			DisplaySync(&display);
+//
+//			LuminositySensorBegin(&luminosity_sensor);
+//			HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
+//		} else {
+//			DisplayWriteUint(&display, 10000);
+//			DisplaySync(&display);
+//		}
+//		HAL_Delay(cycle_delay);
+//	  }
 
 		eMBPoll();
 
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+		btn1_state_curr = BTN1_STATE();
+		btn2_state_curr = BTN2_STATE();
+		btn6_state_curr = BTN6_STATE();
+		btn7_state_curr = BTN7_STATE();
+		btn8_state_curr = BTN8_STATE();
+
+		switch (display_mode_curr) {
+		case DISPLAY_MODE_A1_1:
+			Rtc_DS3231_get(&ts);
+			Display_A1_1(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+					display_mode_prev = display_mode_curr;
+					display_mode_curr = DISPLAY_MODE_EDIT_TIME_1;
+					Beep();
+				} else if (btn2_state_prev != btn2_state_curr) {
+					btn2_state_prev = btn2_state_curr;
+
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_A1_2;
+						Beep();
+					}
+				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+					btn8_pressed_counter = btn_fast_repeat_delay;
+					btn8_state_prev = btn8_state_curr;
+
+					if (btn8_state_curr == BTN_DOWN) {
+						if (brightness < 255)
+							SetBrightness(++brightness);
+					}
+				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+					btn7_pressed_counter = btn_fast_repeat_delay;
+					btn7_state_prev = btn7_state_curr;
+
+					if (btn7_state_curr == BTN_DOWN) {
+						if (brightness)
+							SetBrightness(--brightness);
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_A1_2:
+			Rtc_DS3231_get(&ts);
+			Display_A1_2(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+					display_mode_prev = display_mode_curr;
+					display_mode_curr = DISPLAY_MODE_EDIT_TIME_2;
+					Beep();
+				} else if (btn2_state_prev != btn2_state_curr) {
+					btn2_state_prev = btn2_state_curr;
+
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_A1_3;
+						Beep();
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_A1_3:
+			Rtc_DS3231_get(&ts);
+			Display_A1_3(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+					display_mode_prev = display_mode_curr;
+					display_mode_curr = DISPLAY_MODE_EDIT_DATE;
+					Beep();
+				} else if (btn2_state_prev != btn2_state_curr) {
+					btn2_state_prev = btn2_state_curr;
+
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_A1_4;
+						Beep();
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_A1_4:
+			Rtc_DS3231_get(&ts);
+			Display_A1_4(&display, &ts);
+			{
+				if (btn2_state_prev != btn2_state_curr) {
+					btn2_state_prev = btn2_state_curr;
+
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_A1_5;
+						Beep();
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_A1_5:
+			Rtc_DS3231_get(&ts);
+			Display_A1_5(&display, &ts);
+			{
+				if (btn2_state_prev != btn2_state_curr) {
+					btn2_state_prev = btn2_state_curr;
+
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_A1_1;
+						Beep();
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_TIME_1:
+			Display_EditTime1(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_time) {
+							Rtc_DS3231_set(ts);
+							update_time = 0;
+						}
+
+						display_mode_curr = display_mode_prev;
+					}
+				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+	                if (btn8_state_curr == BTN_DOWN) {
+	                    ts.sec += 1;
+	                    ts.sec %= 60;
+	                    update_time = 1;
+	                }
+
+	                btn8_pressed_counter = btn_fast_repeat_delay;
+	                btn8_state_prev = btn8_state_curr;
+	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+	                if (btn7_state_curr == BTN_DOWN) {
+	                    ts.min += 1;
+	                    ts.min %= 60;
+	                    update_time = 1;
+	                }
+
+	                btn7_pressed_counter = btn_fast_repeat_delay;
+	                btn7_state_prev = btn7_state_curr;
+	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+	                if (btn6_state_curr == BTN_DOWN) {
+	                    ts.hour += 1;
+	                    ts.hour %= 23;
+	                    update_time = 1;
+	                }
+
+	                btn6_pressed_counter = btn_fast_repeat_delay;
+	                btn6_state_prev = btn6_state_curr;
+	            } else if (btn2_state_prev != btn2_state_curr) {
+	            	if (btn2_state_curr == BTN_DOWN) {
+	            		display_mode_curr = DISPLAY_MODE_EDIT_AGING;
+	            	}
+	            }
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_TIME_2:
+			Display_EditTime2(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_time) {
+							Rtc_DS3231_set(ts);
+							update_time = 0;
+						}
+
+						display_mode_curr = display_mode_prev;
+					}
+				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+	                if (btn7_state_curr == BTN_DOWN) {
+	                	ts.sec = 0;
+	                    ts.min += 1;
+	                    ts.min %= 60;
+	                    update_time = 1;
+	                }
+
+	                btn7_pressed_counter = btn_fast_repeat_delay;
+	                btn7_state_prev = btn7_state_curr;
+	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+	                if (btn6_state_curr == BTN_DOWN) {
+	                	ts.sec = 0;
+	                    ts.hour += 1;
+	                    ts.hour %= 23;
+	                    update_time = 1;
+	                }
+
+	                btn6_pressed_counter = btn_fast_repeat_delay;
+	                btn6_state_prev = btn6_state_curr;
+	            }
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_AGING:
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_aging) {
+							Rtc_DS3231_set_aging(aging);
+							update_aging = 0;
+						}
+					}
+
+					display_mode_curr = display_mode_prev;
+				} else {
+					if  (btn8_state_prev != btn8_state_curr) {
+						if (btn8_state_curr == BTN_DOWN) {
+							--aging;
+							update_aging = 1;
+						}
+
+						btn8_state_prev = btn8_state_curr;
+					} else if  (btn7_state_prev != btn7_state_curr) {
+						if (btn7_state_curr == BTN_DOWN) {
+							++aging;
+							update_aging = 1;
+						}
+
+						btn7_state_prev = btn7_state_curr;
+					}
+
+					Display_EditAging(&display, aging);
+				}
+			}
+				//if (btn1_state_prev != btn1_state_curr) {
+					//btn1_state_prev = btn1_state_curr;
+
+//					if (btn1_state_curr == BTN_UP) {
+//						if (update_aging) {
+//							Rtc_DS3231_set_aging(aging);
+//							update_aging = 0;
+//						}
+//
+//						display_mode_curr = display_mode_prev;
+//					}
+//				} else if  (btn8_state_prev != btn8_state_curr) {
+//					if (btn8_state_curr == BTN_DOWN) {
+//						++aging;
+//						update_aging = 1;
+//						Display_EditAging(&display, aging);
+//					}
+//				}
+
+
+			//}
+			break;
+
+		case DISPLAY_MODE_EDIT_DATE:
+			Display_EditDate(&display, &ts);
+			{
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_time) {
+							Rtc_DS3231_set(ts);
+							update_time = 0;
+						}
+
+						display_mode_curr = display_mode_prev;
+					}
+				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+	                if (btn8_state_curr == BTN_DOWN) {
+	                    if (ts.year < 2015)
+							ts.year = 2015;
+
+						ts.year -= 2000;
+						ts.year += 1;
+						ts.year %= 100;
+						ts.year += 2000;
+						update_time = 1;
+	                }
+
+	                btn8_pressed_counter = btn_fast_repeat_delay;
+	                btn8_state_prev = btn8_state_curr;
+	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+	                if (btn7_state_curr == BTN_DOWN) {
+	                	ts.mon += 1;
+						ts.mon %= 12;
+	                    update_time = 1;
+	                }
+
+	                btn7_pressed_counter = btn_fast_repeat_delay;
+	                btn7_state_prev = btn7_state_curr;
+	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+	                if (btn6_state_curr == BTN_DOWN) {
+						ts.mday = (ts.mday % 31) + 1;
+						update_time = 1;
+	                }
+
+	                btn6_pressed_counter = btn_fast_repeat_delay;
+	                btn6_state_prev = btn6_state_curr;
+	            }
+			}
+			break;
+		}
+
+		if (btn6_state_curr == BTN_DOWN)
+			btn6_pressed_counter += cycle_delay;
+
+		if (btn7_state_curr == BTN_DOWN)
+			btn7_pressed_counter += cycle_delay;
+
+		if (btn8_state_curr == BTN_DOWN)
+			btn8_pressed_counter += cycle_delay;
+
+		HAL_Delay(cycle_delay);
 //	  DisplayWriteStr(&display, "CLOUDY", n_places);
 //	  HAL_Delay(1000);
 //
@@ -1095,22 +982,23 @@ int main(void)
 //	  DisplayWriteUint(&display, 123456);
 //	  HAL_Delay(1000);
 
-	  buf[0] = 0x00;
-	  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
-	  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
-
-	  //DisplayWriteUint(&display, i++);
-	  //DisplayWriteUint(&display, (buf[0] & 0b11110000) >> 4);
-	  //DisplayWriteUint(&display, (buf[0] & 0b00001111) >> 0);
-
-	  uint8_t s = ((buf[0] & 0b11110000) >> 4) * 10 + (buf[0] & 0b00001111) >> 0;
-	  uint8_t m = ((buf[1] & 0b11110000) >> 4) * 10 + (buf[1] & 0b00001111) >> 0;
-	  uint8_t h = BcdToBin24Hour(buf[2]);
-
-	  DisplayWriteUint(&display,
-			  h * 10000 + m * 100 + s);
-
-	  HAL_Delay(10);
+//	  buf[0] = 0x00;
+//	  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
+//	  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
+//
+//	  //DisplayWriteUint(&display, i++);
+//	  //DisplayWriteUint(&display, (buf[0] & 0b11110000) >> 4);
+//	  //DisplayWriteUint(&display, (buf[0] & 0b00001111) >> 0);
+//
+//	  uint8_t s = ((buf[0] & 0b11110000) >> 4) * 10 + (buf[0] & 0b00001111) >> 0;
+//	  uint8_t m = ((buf[1] & 0b11110000) >> 4) * 10 + (buf[1] & 0b00001111) >> 0;
+//	  uint8_t h = BcdToBin24Hour(buf[2]);
+//
+//	  DisplayWriteUint(&display,
+//			  h * 10000 + m * 100 + s);
+//	  DisplaySync(&display);
+//
+//	  HAL_Delay(10);
 
 //		c[0] = CH_D;
 //		c[1] = CH_U;
