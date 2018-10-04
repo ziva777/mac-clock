@@ -99,8 +99,8 @@
 #define REG_COILS_START     1
 #define REG_COILS_SIZE      8
 
-#define REG_DISC_START     1
-#define REG_DISC_SIZE      8
+#define REG_DISC_START     	1
+#define REG_DISC_SIZE      	8
 
 /* ----------------------- Static variables ---------------------------------*/
 static USHORT   usRegInputStart = REG_INPUT_START;
