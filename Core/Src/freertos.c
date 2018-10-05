@@ -82,7 +82,7 @@ osThreadId defaultTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+   
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);

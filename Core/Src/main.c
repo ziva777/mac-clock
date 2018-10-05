@@ -520,17 +520,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-//  ws2812_init();
-//  HAL_Delay(1000);
-//  HAL_GPIO_WritePin(RGB_DATA_GPIO_Port, RGB_DATA_Pin, GPIO_PIN_RESET);
-//  ws2812_pixel_rgb_to_buf_dma(127, 30, 0, 0);
-//  ws2812_pixel_rgb_to_buf_dma(244, 152, 66, 0);
-//  ws2812_pixel_rgb_to_buf_dma(127, 33, 0, 1);
-//  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*) &BUF_DMA, ARRAY_LEN);
+  ws2812_init();
+  ws2812_pixel_rgb_to_buf_dma(127, 31, 0, 0);
+  ws2812_pixel_rgb_to_buf_dma(127, 31, 0, 1);
+  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*)BUF_DMA,
+	ARRAY_LEN);
 
 
-  eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
-  eStatus = eMBEnable();
 
 
 
@@ -582,10 +578,10 @@ int main(void)
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
-  MX_FREERTOS_Init();
+//  MX_FREERTOS_Init();
 
   /* Start scheduler */
-  //osKernelStart();
+//  osKernelStart();
   
   /* We should never get here as control is now taken by the scheduler */
 
@@ -618,6 +614,11 @@ int main(void)
 	BTN_STATES btn8_state_prev = btn8_state_curr;
 
 	SetBrightness(brightness);
+
+
+	  eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
+	  eStatus = eMBEnable();
+
 
   while (1)
   {
