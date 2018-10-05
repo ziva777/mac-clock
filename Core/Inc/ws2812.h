@@ -1,7 +1,7 @@
 /*
  * ws2812.h
  *
- *  Created on: 3 сент. 2018 г.
+ *  Created on: 3 пїЅпїЅпїЅпїЅ. 2018 пїЅ.
  *      Author: bunin
  */
 
@@ -18,8 +18,8 @@
 #define ARRAY_LEN DELAY_LEN + LED_COUNT * 24
 
 //#define HIGH 76
-#define HIGH 58
-#define LOW 29
+#define HIGH 59
+#define LOW 28
 
 //--------------------------------------------------
 #define BitIsSet(reg, bit) ((reg & (1 << bit)) != 0)

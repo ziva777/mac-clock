@@ -70,10 +70,6 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-//uint32_t tt[1];
-//uint32_t flag_adc_dma;
-
-
 /* ----------------------- Defines ------------------------------------------*/
 #define REG_INPUT_START                 ( 1 )
 #define REG_INPUT_NREGS                 ( 12 )
@@ -220,13 +216,6 @@ int main(void)
 //	HAL_Delay(1);
 //	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
 
-
-
-//	flag_adc_dma = 0;
-//	HAL_ADC_Start_DMA(&hadc1, tt, 1);
-
-
-
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
@@ -264,73 +253,6 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-
-//	  DisplayWriteStr(&display, "CLOUDY", n_places);
-//	  HAL_Delay(1000);
-//
-//	  DisplayWriteStr(&display, "DOLLAR", n_places);
-//	  HAL_Delay(1000);
-//
-//	  DisplayWriteUint(&display, 0);
-//	  HAL_Delay(1000);
-//
-//	  DisplayWriteUint(&display, 123456);
-//	  HAL_Delay(1000);
-
-//	  buf[0] = 0x00;
-//	  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
-//	  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
-//
-//	  //DisplayWriteUint(&display, i++);
-//	  //DisplayWriteUint(&display, (buf[0] & 0b11110000) >> 4);
-//	  //DisplayWriteUint(&display, (buf[0] & 0b00001111) >> 0);
-//
-//	  uint8_t s = ((buf[0] & 0b11110000) >> 4) * 10 + (buf[0] & 0b00001111) >> 0;
-//	  uint8_t m = ((buf[1] & 0b11110000) >> 4) * 10 + (buf[1] & 0b00001111) >> 0;
-//	  uint8_t h = BcdToBin24Hour(buf[2]);
-//
-//	  DisplayWriteUint(&display,
-//			  h * 10000 + m * 100 + s);
-//	  DisplaySync(&display);
-//
-//	  HAL_Delay(10);
-
-//		c[0] = CH_D;
-//		c[1] = CH_U;
-//		c[2] = CH_O;
-//		c[3] = CH_L;
-//		c[4] = CH_C;
-//		c[5] = CH_BLANK;
-//
-//		DisplayWrite(&display, c, d, n_places);
-//
-////		for (int i = 0; i != 256; ++i) {
-////			htim5.Instance->CCR4 = i;
-////			HAL_Delay(10);
-////		}
-////
-//		HAL_Delay(1000);
-////
-////		for (int i = 255; i != 0; --i) {
-////			htim5.Instance->CCR4 = i;
-////			HAL_Delay(10);
-////		}
-//
-//		//HAL_Delay(1000);
-//
-////		htim5.Instance->CCR4 = 250;
-////		HAL_Delay(1000);
-////
-//		c[0] = CH_R;
-//		c[1] = CH_I;
-//		c[2] = CH_A;
-//		c[3] = CH_F;
-//		c[4] = CH_BLANK;
-//		c[5] = CH_BLANK;
-//
-//		DisplayWrite(&display, c, d, n_places);
-////		htim5.Instance->CCR4 = 100;
-//		HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 

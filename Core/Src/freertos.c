@@ -56,6 +56,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdlib.h>
+
 #include "stm32f4xx_hal.h"
 #include "adc.h"
 #include "dma.h"
@@ -75,6 +77,7 @@
 
 #include "wire.h"
 #include "ws2812.h"
+#include "kalman.h"
 #include "display.h"
 #include "rtc_ds3221.h"
 #include "luminosity_sensor.h"
@@ -120,6 +123,8 @@ typedef enum {
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+static KalmanFilter luminosity_filter;
+
 osThreadId modbus_task_handle;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
@@ -127,10 +132,27 @@ osThreadId defaultTaskHandle;
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 /* Установка яркости */
-static void SetBrightness(uint16_t br)
+static
+void SetBrightness(uint16_t br)
 {
     htim5.Instance->CCR4 = br;
     HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+}
+
+static
+void SetBacklight(uint8_t r, uint8_t g, uint8_t b)
+{
+	static uint8_t R, G, B;
+
+	if (r != R || g != G || b != B) {
+		R = r;
+		G = g;
+		B = b;
+
+		ws2812_pixel_rgb_to_buf_dma(r, g, b, 0);
+		ws2812_pixel_rgb_to_buf_dma(r, g, b, 1);
+		HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
+	}
 }
 
 /* Бип */
@@ -139,6 +161,26 @@ void Beep()
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 	HAL_Delay(10);
 	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+}
+
+static const uint8_t BR_MIN = 1u;        /* Abs brightness minimum */
+static const uint8_t BR_MAX = 254u;      /* Abs brightness maximum */
+static const uint16_t LUM_MIN = 0u;      /* Abs luminosity minimum */
+static const uint16_t LUM_MAX = 4095u;   /* Abs luminosity maximum */
+
+static
+float calc_brightness_linear(float l,
+                             float b_inf,
+                             float b_sup)
+{
+    float k, b, y;
+
+    k = (b_inf - b_sup);
+    k /=  (float)(LUM_MAX - LUM_MIN);
+    b = b_sup;
+    y = k * l + b;
+
+    return y;
 }
 
 /* Отобразить чч.мм.сс */
@@ -441,14 +483,12 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN StartDefaultTask */
-	HAL_Delay(100);
+	HAL_Delay(10);
 
 	ws2812_init();
-	ws2812_pixel_rgb_to_buf_dma(255,   0,   0, 0);
-	ws2812_pixel_rgb_to_buf_dma(  0,   0, 255, 1);
-	HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
 
 	Beep();
+	SetBacklight(255, 255, 255);
 
 	HAL_TIM_Base_Start(&htim5);
 	HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
@@ -458,6 +498,11 @@ void StartDefaultTask(void const * argument)
 	Rtc_DS3231_init(DS3231_INTCN);
 	Timestamp ts;
 
+	/* Yep, these params are magic! */
+	KalmanFilterInit(&luminosity_filter,
+					 4000.0f,
+					 4000.0f,
+					 0.125f);
 
 	Display display;
 	size_t n_places = 6;
@@ -503,10 +548,39 @@ void StartDefaultTask(void const * argument)
 
 	SetBrightness(brightness);
 
+	int v_prev = -1;
+	int v_curr = -1;
+	int v_lim = 255;
+	float lum;
+	float br = 0;
 
   /* Infinite loop */
-  for(;;)
-  {
+	while (1) {
+
+		if (LuminositySensorIsReady(&luminosity_sensor)) {
+			lum = luminosity_sensor.value[0];
+			lum = KalmanFilterUpdate(&luminosity_filter, lum);
+			br = calc_brightness_linear(lum, BR_MIN, BR_MAX);
+			SetBrightness(br);
+
+			LuminositySensorBegin(&luminosity_sensor);
+			HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
+		}
+
+		if (ts.hour >= 22) {
+			v_curr = (ts.min + 1) * 4;
+			if (v_prev != v_curr) {
+				SetBacklight((240-v_curr) % v_lim, v_curr % v_lim, 0);
+				v_prev = v_curr;
+			}
+		} else if (ts.hour <= 6) {
+			SetBacklight(0, 0, 255);
+		} else if (ts.hour <= 18) {
+			SetBacklight(255, 255, 255);
+		} else {
+			SetBacklight(100, 100, 100);
+		}
+
 		btn1_state_curr = BTN1_STATE();
 		btn2_state_curr = BTN2_STATE();
 		btn6_state_curr = BTN6_STATE();
@@ -536,16 +610,22 @@ void StartDefaultTask(void const * argument)
 					btn8_state_prev = btn8_state_curr;
 
 					if (btn8_state_curr == BTN_DOWN) {
-						if (brightness < 255)
-							SetBrightness(++brightness);
+						if (brightness < 255) {
+//							SetBrightness(++brightness);
+							ws2812_pixel_rgb_to_buf_dma(brightness, 150, 0, 0);
+							HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
+						}
 					}
 				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
 					btn7_pressed_counter = btn_fast_repeat_delay;
 					btn7_state_prev = btn7_state_curr;
 
 					if (btn7_state_curr == BTN_DOWN) {
-						if (brightness)
-							SetBrightness(--brightness);
+						if (brightness) {
+//							SetBrightness(--brightness);
+							ws2812_pixel_rgb_to_buf_dma(brightness, 0, 150, 0);
+							HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
+						}
 					}
 				}
 			}
@@ -640,37 +720,37 @@ void StartDefaultTask(void const * argument)
 						display_mode_curr = display_mode_prev;
 					}
 				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-	                if (btn8_state_curr == BTN_DOWN) {
-	                    ts.sec += 1;
-	                    ts.sec %= 60;
-	                    update_time = 1;
-	                }
+					if (btn8_state_curr == BTN_DOWN) {
+						ts.sec += 1;
+						ts.sec %= 60;
+						update_time = 1;
+					}
 
-	                btn8_pressed_counter = btn_fast_repeat_delay;
-	                btn8_state_prev = btn8_state_curr;
-	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                    ts.min += 1;
-	                    ts.min %= 60;
-	                    update_time = 1;
-	                }
+					btn8_pressed_counter = btn_fast_repeat_delay;
+					btn8_state_prev = btn8_state_curr;
+				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+					if (btn7_state_curr == BTN_DOWN) {
+						ts.min += 1;
+						ts.min %= 60;
+						update_time = 1;
+					}
 
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
-	                    ts.hour += 1;
-	                    ts.hour %= 23;
-	                    update_time = 1;
-	                }
+					btn7_pressed_counter = btn_fast_repeat_delay;
+					btn7_state_prev = btn7_state_curr;
+				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+					if (btn6_state_curr == BTN_DOWN) {
+						ts.hour += 1;
+						ts.hour %= 23;
+						update_time = 1;
+					}
 
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            } else if (btn2_state_prev != btn2_state_curr) {
-	            	if (btn2_state_curr == BTN_DOWN) {
-	            		display_mode_curr = DISPLAY_MODE_EDIT_AGING;
-	            	}
-	            }
+					btn6_pressed_counter = btn_fast_repeat_delay;
+					btn6_state_prev = btn6_state_curr;
+				} else if (btn2_state_prev != btn2_state_curr) {
+					if (btn2_state_curr == BTN_DOWN) {
+						display_mode_curr = DISPLAY_MODE_EDIT_AGING;
+					}
+				}
 			}
 			break;
 
@@ -689,26 +769,26 @@ void StartDefaultTask(void const * argument)
 						display_mode_curr = display_mode_prev;
 					}
 				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                	ts.sec = 0;
-	                    ts.min += 1;
-	                    ts.min %= 60;
-	                    update_time = 1;
-	                }
+					if (btn7_state_curr == BTN_DOWN) {
+						ts.sec = 0;
+						ts.min += 1;
+						ts.min %= 60;
+						update_time = 1;
+					}
 
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
-	                	ts.sec = 0;
-	                    ts.hour += 1;
-	                    ts.hour %= 23;
-	                    update_time = 1;
-	                }
+					btn7_pressed_counter = btn_fast_repeat_delay;
+					btn7_state_prev = btn7_state_curr;
+				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+					if (btn6_state_curr == BTN_DOWN) {
+						ts.sec = 0;
+						ts.hour += 1;
+						ts.hour %= 23;
+						update_time = 1;
+					}
 
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            }
+					btn6_pressed_counter = btn_fast_repeat_delay;
+					btn6_state_prev = btn6_state_curr;
+				}
 			}
 			break;
 
@@ -762,8 +842,8 @@ void StartDefaultTask(void const * argument)
 						display_mode_curr = display_mode_prev;
 					}
 				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-	                if (btn8_state_curr == BTN_DOWN) {
-	                    if (ts.year < 2015)
+					if (btn8_state_curr == BTN_DOWN) {
+						if (ts.year < 2015)
 							ts.year = 2015;
 
 						ts.year -= 2000;
@@ -771,28 +851,28 @@ void StartDefaultTask(void const * argument)
 						ts.year %= 100;
 						ts.year += 2000;
 						update_time = 1;
-	                }
+					}
 
-	                btn8_pressed_counter = btn_fast_repeat_delay;
-	                btn8_state_prev = btn8_state_curr;
-	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                	ts.mon += 1;
+					btn8_pressed_counter = btn_fast_repeat_delay;
+					btn8_state_prev = btn8_state_curr;
+				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+					if (btn7_state_curr == BTN_DOWN) {
+						ts.mon += 1;
 						ts.mon %= 12;
-	                    update_time = 1;
-	                }
+						update_time = 1;
+					}
 
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
+					btn7_pressed_counter = btn_fast_repeat_delay;
+					btn7_state_prev = btn7_state_curr;
+				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+					if (btn6_state_curr == BTN_DOWN) {
 						ts.mday = (ts.mday % 31) + 1;
 						update_time = 1;
-	                }
+					}
 
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            }
+					btn6_pressed_counter = btn_fast_repeat_delay;
+					btn6_state_prev = btn6_state_curr;
+				}
 			}
 			break;
 		}
@@ -807,7 +887,6 @@ void StartDefaultTask(void const * argument)
 			btn8_pressed_counter += cycle_delay;
 
 		HAL_Delay(cycle_delay);
-
   }
   /* USER CODE END StartDefaultTask */
 }
