@@ -60,18 +60,9 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
-#include <string.h>
-#include <stdlib.h>
-
 #include "mb.h"
 #include "mbport.h"
 #include "mbutils.h"
-
-#include "wire.h"
-#include "ws2812.h"
-#include "display.h"
-#include "rtc_ds3221.h"
-#include "luminosity_sensor.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -119,7 +110,7 @@ static unsigned char ucRegCoilsBuf[REG_COILS_SIZE / 8];
 
 static unsigned char ucRegDiscBuf[REG_DISC_SIZE / 8] = { 0 };
 
-static uint32_t lock_nesting_count = 0;
+//static uint32_t lock_nesting_count = 0;
 
 
 /* USER CODE END PV */
@@ -139,334 +130,28 @@ void MX_FREERTOS_Init(void);
 
 void __critical_enter( void )
 {
-	__disable_irq();
-	++lock_nesting_count;
+	taskENTER_CRITICAL();
 }
 
 void __critical_exit( void )
 {
-	/* Unlock interrupts only when we are exiting the outermost nested  call. */
-	--lock_nesting_count;
-	if (lock_nesting_count == 0) {
-		__enable_irq();
-	}
+	taskEXIT_CRITICAL();
 }
 
 
 
 
-
-uint8_t BcdToUint8(uint8_t val) {
-    return val - 6 * (val >> 4);
-}
-
-uint8_t BcdToBin24Hour(uint8_t bcdHour) {
-    uint8_t hour;
-
-    if (bcdHour & 0x40) {
-        // 12 hour mode, convert to 24
-        int isPm = ((bcdHour & 0x20) != 0);
-
-        hour = BcdToUint8(bcdHour & 0x1f);
-
-        if (isPm) {
-           hour += 12;
-        }
-    } else {
-        hour = BcdToUint8(bcdHour);
-    }
-
-    return hour;
-}
-
-typedef enum {
-    BTN_UP = GPIO_PIN_SET,
-    BTN_DOWN = GPIO_PIN_RESET
-} BTN_STATES;
-
-#define BTN1_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN0_GPIO_Port, BTN0_Pin)
-#define BTN2_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN1_GPIO_Port, BTN1_Pin)
-#define BTN3_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN2_GPIO_Port, BTN2_Pin)
-#define BTN4_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN3_GPIO_Port, BTN3_Pin)
-#define BTN5_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN4_GPIO_Port, BTN4_Pin)
-#define BTN6_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN5_GPIO_Port, BTN5_Pin)
-#define BTN7_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN6_GPIO_Port, BTN6_Pin)
-#define BTN8_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN7_GPIO_Port, BTN7_Pin)
-
-static void SetBrightness(uint16_t br)
-{
-    htim5.Instance->CCR4 = br;
-    HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
-}
 
 //static uint32_t GetLuminosity()
 //{
 ////	uint32_t tt[1];
 ////	uint32_t flag_adc_dma;
 //}
-/* Бип */
-void Beep()
-{
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-	HAL_Delay(10);
-	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
-}
 
-/* Отобразить чч.мм.сс */
-void Display_A1_1(Display *display,
-				  Timestamp *ts)
-{
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
 
-	uint8_t h1, h2;
-	uint8_t m1, m2;
-	uint8_t s1, s2;
 
-	h1 = ts->hour / 10;
-	h2 = ts->hour % 10;
-	h1 += 0x30;
-	h2 += 0x30;
-	c[4] = AsciiToCharacter((char) h2);
 
-	if (h1 != 0x30)
-		c[5] = AsciiToCharacter((char) h1);
-	else
-		c[5] = CH_BLANK;
 
-	m1 = ts->min / 10;
-	m2 = ts->min % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2] = AsciiToCharacter((char) m2);
-	c[3] = AsciiToCharacter((char) m1);
-
-	s1 = ts->sec / 10;
-	s2 = ts->sec % 10;
-	s1 += 0x30;
-	s2 += 0x30;
-	c[0] = AsciiToCharacter((char) s2);
-	c[1] = AsciiToCharacter((char) s1);
-
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
-
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
-}
-
-/* Отобразить чч.мм с мигающим индикатором */
-void Display_A1_2(Display *display,
-				  Timestamp *ts)
-{
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
-
-	uint8_t h1, h2;
-	uint8_t m1, m2;
-
-	h1 = ts->hour / 10;
-	h2 = ts->hour % 10;
-	h1 += 0x30;
-	h2 += 0x30;
-
-	c[4 - 1] = AsciiToCharacter((char) h2);
-
-	if (h1 != 0x30)
-		c[5 - 1] = AsciiToCharacter((char) h1);
-	else
-		c[5 - 1] = CH_BLANK;
-
-	m1 = ts->min / 10;
-	m2 = ts->min % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2 - 1] = AsciiToCharacter((char) m2);
-	c[3 - 1] = AsciiToCharacter((char) m1);
-
-	c[0] = AsciiToCharacter((char) ' ');
-	c[5] = AsciiToCharacter((char) ' ');
-
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = (ts->sec % 2 == 0 ? DOT_HIGHLIGHT : DOT_OBSCURE);
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
-
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
-}
-
-/* Отобразить дд.ММ.гг */
-void Display_A1_3(Display *display,
-				  Timestamp *ts)
-{
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
-
-	uint8_t h1, h2;
-	uint8_t m1, m2;
-	uint8_t s1, s2;
-
-	h1 = ts->mday / 10;
-	h2 = ts->mday % 10;
-	h1 += 0x30;
-	h2 += 0x30;
-	c[4] = AsciiToCharacter((char) h2);
-
-	if (h1 != 0x30)
-		c[5] = AsciiToCharacter((char) h1);
-	else
-		c[5] = CH_BLANK;
-
-	m1 = ts->mon / 10;
-	m2 = ts->mon % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2] = AsciiToCharacter((char) m2);
-	c[3] = AsciiToCharacter((char) m1);
-
-	s1 = (ts->year % 100) / 10;
-	s2 = (ts->year % 100) % 10;
-	s1 += 0x30;
-	s2 += 0x30;
-	c[0] = AsciiToCharacter((char) s2);
-	c[1] = AsciiToCharacter((char) s1);
-
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
-
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
-}
-
-/* Отобразить чередование чч.мм.сс и дд.ММ.гг */
-void Display_A1_4(Display *display,
-				  Timestamp *ts)
-{
-	static int flip_flop = 0;
-	static int counter = 0;
-	static const int counter_max = 5;
-	static int sec_prev = 0;
-
-	if (sec_prev != ts->sec) {
-		sec_prev = ts->sec;
-
-		if (++counter == counter_max) {
-			counter = 0;
-			++flip_flop;
-		}
-
-		if (flip_flop % 2) {
-			Display_A1_1(display, ts);
-		} else {
-			Display_A1_3(display, ts);
-		}
-	}
-}
-
-/* Отобразить чередование чч.мм и дд.ММ.гг */
-void Display_A1_5(Display *display,
-				  Timestamp *ts)
-{
-	static int flip_flop = 0;
-	static int counter = 0;
-	static const int counter_max = 5;
-	static int sec_prev = 0;
-
-	if (sec_prev != ts->sec) {
-		sec_prev = ts->sec;
-
-		if (++counter == counter_max) {
-			counter = 0;
-			++flip_flop;
-		}
-
-		if (flip_flop % 2) {
-			Display_A1_2(display, ts);
-		} else {
-			Display_A1_3(display, ts);
-		}
-	}
-}
-
-/* Редактировать время в формате чч.мм.сс */
-void Display_EditTime1(Display *display,
-				  	   Timestamp *ts)
-{
-	Display_A1_1(display, ts);
-}
-
-/* Редактировать время в формате чч.мм */
-void Display_EditTime2(Display *display,
-				  	   Timestamp *ts)
-{
-	Display_A1_2(display, ts);
-}
-
-/* Отобразить параметр точной настройки */
-void Display_EditAging(Display *display,
-					   int8_t aging)
-{
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
-
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
-
-	c[5] = CH_A;
-	c[4] = CH_G;
-	c[3] = CH_BLANK;
-
-	if (aging < 0) {
-		c[3] = CH_MINUS;
-		aging = abs(aging);
-	}
-
-	c[2] = AsciiToCharacter((aging / 100) % 10 + 0x30);
-	c[1] = AsciiToCharacter((aging / 10) % 10 + 0x30);
-	c[0] = AsciiToCharacter((aging / 1) % 10 + 0x30);
-
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
-}
-
-/* Редактировать дату */
-void Display_EditDate(Display *display,
-				  	  Timestamp *ts)
-{
-	Display_A1_3(display, ts);
-}
-
-typedef enum {
-	DISPLAY_MODE_A1_1,
-	DISPLAY_MODE_A1_2,
-	DISPLAY_MODE_A1_3,
-	DISPLAY_MODE_A1_4,
-	DISPLAY_MODE_A1_5,
-
-	DISPLAY_MODE_EDIT_TIME_1,
-	DISPLAY_MODE_EDIT_TIME_2,
-	DISPLAY_MODE_EDIT_AGING,
-	DISPLAY_MODE_EDIT_DATE
-} DISPLAY_MODES;
 
 /* USER CODE END 0 */
 
@@ -479,12 +164,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
-	eMBErrorCode eStatus;
-	DISPLAY_MODES display_mode_curr = DISPLAY_MODE_A1_1;
-	DISPLAY_MODES display_mode_prev = display_mode_curr;
 
-	Display display;
-	size_t n_places = 6;
 
   /* USER CODE END 1 */
 
@@ -520,28 +200,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-  ws2812_init();
-  ws2812_pixel_rgb_to_buf_dma(127, 31, 0, 0);
-  ws2812_pixel_rgb_to_buf_dma(127, 31, 0, 1);
-  HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*)BUF_DMA,
-	ARRAY_LEN);
-
-
-
-
-
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-  HAL_Delay(10);
-  HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
-
-
-  HAL_TIM_Base_Start(&htim5);
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
-
-
-  Wire_SetI2C(&hi2c1);
-  Rtc_DS3231_init(DS3231_INTCN);
-  Timestamp ts;
 
 //  uint8_t buf[20];
 //  buf[0] = 0xD0;
@@ -555,11 +213,7 @@ int main(void)
 //  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
 //  buf[1] = buf[0];
 
-	DisplayCreate(&display,
-				  n_places,
-				  &hspi1,
-				  LED_DATA_LATCH_GPIO_Port,
-				  LED_DATA_LATCH_Pin);
+
 
 //	HAL_SPI_Transmit(&hspi1, aa_dma, 7, 1000);
 //	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
@@ -571,63 +225,25 @@ int main(void)
 //	flag_adc_dma = 0;
 //	HAL_ADC_Start_DMA(&hadc1, tt, 1);
 
-	LuminositySensorCreate(&luminosity_sensor);
-	LuminositySensorBegin(&luminosity_sensor);
-	HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
+
 
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
-//  MX_FREERTOS_Init();
+  MX_FREERTOS_Init();
 
   /* Start scheduler */
-//  osKernelStart();
+  osKernelStart();
   
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	const uint32_t cycle_delay = 10u;
-	const uint32_t btn_repeat_delay = 1000u;
-	const uint32_t btn_fast_repeat_delay = 850u;
 
-    int update_time = 0;
-    int update_aging = 0;
-
-    int8_t aging = Rtc_DS3231_get_aging();
-    uint8_t brightness = 200u;
-
-    uint32_t btn6_pressed_counter = 0;
-	uint32_t btn7_pressed_counter = 0;
-	uint32_t btn8_pressed_counter = 0;
-
-	BTN_STATES btn1_state_curr = BTN1_STATE();
-	BTN_STATES btn2_state_curr = BTN2_STATE();
-	BTN_STATES btn6_state_curr = BTN6_STATE();
-	BTN_STATES btn7_state_curr = BTN7_STATE();
-	BTN_STATES btn8_state_curr = BTN8_STATE();
-
-	BTN_STATES btn1_state_prev = btn1_state_curr;
-	BTN_STATES btn2_state_prev = btn2_state_curr;
-	BTN_STATES btn6_state_prev = btn6_state_curr;
-	BTN_STATES btn7_state_prev = btn7_state_curr;
-	BTN_STATES btn8_state_prev = btn8_state_curr;
-
-	SetBrightness(brightness);
-
-
-	  eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
-	  eStatus = eMBEnable();
 
 
   while (1)
   {
-//		if ( flag_adc_dma == 1 ) {
-//			flag_adc_dma = 0;
-//			usRegInputBuf[0] = tt[0];
-//			HAL_ADC_Start_DMA(&hadc1, tt, 1);
-////			DisplayWriteUint(&display, tt[0]);
-//		}
 
 //	  while (1) {
 //		if (LuminositySensorIsReady(&luminosity_sensor)) {
@@ -645,332 +261,10 @@ int main(void)
 //		HAL_Delay(cycle_delay);
 //	  }
 
-		eMBPoll();
-
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-		btn1_state_curr = BTN1_STATE();
-		btn2_state_curr = BTN2_STATE();
-		btn6_state_curr = BTN6_STATE();
-		btn7_state_curr = BTN7_STATE();
-		btn8_state_curr = BTN8_STATE();
 
-		switch (display_mode_curr) {
-		case DISPLAY_MODE_A1_1:
-			Rtc_DS3231_get(&ts);
-			Display_A1_1(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_TIME_1;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_2;
-						Beep();
-					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-					btn8_pressed_counter = btn_fast_repeat_delay;
-					btn8_state_prev = btn8_state_curr;
-
-					if (btn8_state_curr == BTN_DOWN) {
-						if (brightness < 255)
-							SetBrightness(++brightness);
-					}
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-					btn7_pressed_counter = btn_fast_repeat_delay;
-					btn7_state_prev = btn7_state_curr;
-
-					if (btn7_state_curr == BTN_DOWN) {
-						if (brightness)
-							SetBrightness(--brightness);
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_2:
-			Rtc_DS3231_get(&ts);
-			Display_A1_2(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_TIME_2;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_3;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_3:
-			Rtc_DS3231_get(&ts);
-			Display_A1_3(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_DATE;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_4;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_4:
-			Rtc_DS3231_get(&ts);
-			Display_A1_4(&display, &ts);
-			{
-				if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_5;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_5:
-			Rtc_DS3231_get(&ts);
-			Display_A1_5(&display, &ts);
-			{
-				if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_1;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_TIME_1:
-			Display_EditTime1(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-						}
-
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-	                if (btn8_state_curr == BTN_DOWN) {
-	                    ts.sec += 1;
-	                    ts.sec %= 60;
-	                    update_time = 1;
-	                }
-
-	                btn8_pressed_counter = btn_fast_repeat_delay;
-	                btn8_state_prev = btn8_state_curr;
-	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                    ts.min += 1;
-	                    ts.min %= 60;
-	                    update_time = 1;
-	                }
-
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
-	                    ts.hour += 1;
-	                    ts.hour %= 23;
-	                    update_time = 1;
-	                }
-
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            } else if (btn2_state_prev != btn2_state_curr) {
-	            	if (btn2_state_curr == BTN_DOWN) {
-	            		display_mode_curr = DISPLAY_MODE_EDIT_AGING;
-	            	}
-	            }
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_TIME_2:
-			Display_EditTime2(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-						}
-
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                	ts.sec = 0;
-	                    ts.min += 1;
-	                    ts.min %= 60;
-	                    update_time = 1;
-	                }
-
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
-	                	ts.sec = 0;
-	                    ts.hour += 1;
-	                    ts.hour %= 23;
-	                    update_time = 1;
-	                }
-
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            }
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_AGING:
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_aging) {
-							Rtc_DS3231_set_aging(aging);
-							update_aging = 0;
-						}
-					}
-
-					display_mode_curr = display_mode_prev;
-				} else {
-					if  (btn8_state_prev != btn8_state_curr) {
-						if (btn8_state_curr == BTN_DOWN) {
-							--aging;
-							update_aging = 1;
-						}
-
-						btn8_state_prev = btn8_state_curr;
-					} else if  (btn7_state_prev != btn7_state_curr) {
-						if (btn7_state_curr == BTN_DOWN) {
-							++aging;
-							update_aging = 1;
-						}
-
-						btn7_state_prev = btn7_state_curr;
-					}
-
-					Display_EditAging(&display, aging);
-				}
-			}
-				//if (btn1_state_prev != btn1_state_curr) {
-					//btn1_state_prev = btn1_state_curr;
-
-//					if (btn1_state_curr == BTN_UP) {
-//						if (update_aging) {
-//							Rtc_DS3231_set_aging(aging);
-//							update_aging = 0;
-//						}
-//
-//						display_mode_curr = display_mode_prev;
-//					}
-//				} else if  (btn8_state_prev != btn8_state_curr) {
-//					if (btn8_state_curr == BTN_DOWN) {
-//						++aging;
-//						update_aging = 1;
-//						Display_EditAging(&display, aging);
-//					}
-//				}
-
-
-			//}
-			break;
-
-		case DISPLAY_MODE_EDIT_DATE:
-			Display_EditDate(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-						}
-
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-	                if (btn8_state_curr == BTN_DOWN) {
-	                    if (ts.year < 2015)
-							ts.year = 2015;
-
-						ts.year -= 2000;
-						ts.year += 1;
-						ts.year %= 100;
-						ts.year += 2000;
-						update_time = 1;
-	                }
-
-	                btn8_pressed_counter = btn_fast_repeat_delay;
-	                btn8_state_prev = btn8_state_curr;
-	            } else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-	                if (btn7_state_curr == BTN_DOWN) {
-	                	ts.mon += 1;
-						ts.mon %= 12;
-	                    update_time = 1;
-	                }
-
-	                btn7_pressed_counter = btn_fast_repeat_delay;
-	                btn7_state_prev = btn7_state_curr;
-	            } else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-	                if (btn6_state_curr == BTN_DOWN) {
-						ts.mday = (ts.mday % 31) + 1;
-						update_time = 1;
-	                }
-
-	                btn6_pressed_counter = btn_fast_repeat_delay;
-	                btn6_state_prev = btn6_state_curr;
-	            }
-			}
-			break;
-		}
-
-		if (btn6_state_curr == BTN_DOWN)
-			btn6_pressed_counter += cycle_delay;
-
-		if (btn7_state_curr == BTN_DOWN)
-			btn7_pressed_counter += cycle_delay;
-
-		if (btn8_state_curr == BTN_DOWN)
-			btn8_pressed_counter += cycle_delay;
-
-		HAL_Delay(cycle_delay);
 //	  DisplayWriteStr(&display, "CLOUDY", n_places);
 //	  HAL_Delay(1000);
 //
