@@ -81,6 +81,8 @@
 #include "display.h"
 #include "rtc_ds3221.h"
 #include "luminosity_sensor.h"
+
+#include "sun_n_moon.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,9 +99,15 @@ typedef enum {
 	DISPLAY_MODE_A1_4,
 	DISPLAY_MODE_A1_5,
 
+	DISPLAY_MODE_S1_1,
+	DISPLAY_MODE_S1_2,
+
 	DISPLAY_MODE_EDIT_TIME_1,
 	DISPLAY_MODE_EDIT_TIME_2,
 	DISPLAY_MODE_EDIT_AGING,
+	DISPLAY_MODE_EDIT_LATITUDE,
+	DISPLAY_MODE_EDIT_LONGITUDE,
+	DISPLAY_MODE_EDIT_TIMEZONE,
 	DISPLAY_MODE_EDIT_DATE
 } DISPLAY_MODES;
 /* USER CODE END PTD */
@@ -111,6 +119,9 @@ typedef enum {
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define DEFAULT_LATITUDE  	55.75
+#define DEFAULT_LONGITUDE  	37.50
+
 #define BTN1_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN0_GPIO_Port, BTN0_Pin)
 #define BTN2_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN1_GPIO_Port, BTN1_Pin)
 #define BTN3_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN2_GPIO_Port, BTN2_Pin)
@@ -124,6 +135,49 @@ typedef enum {
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 static KalmanFilter luminosity_filter;
+
+static double TIMEZONES[] = {
+    -12.00,
+    -11.00,
+    -10.00,
+    -09.3001,
+    -09.00,
+    -08.00,
+    -07.00,
+    -06.00,
+    -05.00,
+    -04.00,
+    -03.3001,
+    -03.00,
+    -02.00,
+    -01.00,
+    +00.00,
+    +01.00,
+    +02.00,
+    +03.00,
+    +03.3001,
+    +04.00,
+    +04.3001,
+    +05.00,
+    +05.3001,
+    +05.4501,
+    +06.00,
+    +06.3001,
+    +07.00,
+    +08.00,
+    +08.4501,
+    +09.00,
+    +09.3001,
+    +10.00,
+    +10.3001,
+    +11.00,
+    +12.00,
+    +12.4501,
+    +13.00,
+    +14.00,
+};
+static const uint8_t N_TIMEZONES = sizeof(TIMEZONES) / sizeof(TIMEZONES[0]);
+static const uint8_t MSK_ZONE = 17;
 
 osThreadId modbus_task_handle;
 /* USER CODE END Variables */
@@ -181,6 +235,101 @@ float calc_brightness_linear(float l,
     y = k * l + b;
 
     return y;
+}
+
+/* Отобразить восход солнца чч.мм */
+void Display_S1_1(Display *display,
+				  Timestamp *ts)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	uint8_t h1, h2;
+	uint8_t m1, m2;
+
+	h1 = ts->hour / 10;
+	h2 = ts->hour % 10;
+	h1 += 0x30;
+	h2 += 0x30;
+
+	c[4 - 1] = AsciiToCharacter((char) h2);
+
+	if (h1 != 0x30)
+		c[5 - 1] = AsciiToCharacter((char) h1);
+	else
+		c[5 - 1] = CH_BLANK;
+
+	m1 = ts->min / 10;
+	m2 = ts->min % 10;
+	m1 += 0x30;
+	m2 += 0x30;
+	c[2 - 1] = AsciiToCharacter((char) m2);
+	c[3 - 1] = AsciiToCharacter((char) m1);
+
+	c[0] = AsciiToCharacter((char) ' ');
+	c[5] = CH_BLANK;
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_OBSCURE;
+	d[3] = DOT_HIGHLIGHT;
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Отобразить сообщение */
+void Display_Msg(Display *display,
+				 Character msg[],
+				 size_t n_places)
+{
+//	const size_t n_places = 6;
+	Dot d[n_places];
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_OBSCURE;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	DisplayWrite(display, msg, d, n_places);
+	DisplaySync(display);
+}
+
+/* Отобразить восход солнца (сообщение) */
+void Display_S1_1_Msg(Display *display)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+
+	c[5] = CH_B;
+	c[4] = CH_O;
+	c[3] = CH_C;
+	c[2] = CH_X;
+	c[1] = CH_O;
+	c[0] = CH_D_rus;
+
+	Display_Msg(display, c, n_places);
+}
+
+/* Отобразить заход солнца (сообщение) */
+void Display_S2_1_Msg(Display *display)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+
+	c[5] = CH_3;
+	c[4] = CH_A;
+	c[3] = CH_X;
+	c[2] = CH_O;
+	c[1] = CH_D_rus;
+	c[0] = CH_BLANK;
+
+	Display_Msg(display, c, n_places);
 }
 
 /* Отобразить чч.мм.сс */
@@ -419,6 +568,107 @@ void Display_EditAging(Display *display,
 	DisplaySync(display);
 }
 
+/* Редактирование широты (-90.00 ... +90.00) */
+void Display_EditLatitude(Display *display,
+						  double latitude)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	c[5] = (latitude > 0.0 ? CH_N : CH_S);
+	c[4] = CH_BLANK;
+	c[3] = CH_BLANK;
+
+	latitude = fabs(latitude);
+	int hi = latitude;
+	int low = ((latitude - hi) * 100.0);
+	int r = hi * 100 + low;
+
+
+	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Редактирование долготы (-180.00 ... +180.00) */
+void Display_EditLongitude(Display *display,
+						   double longitude)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	c[5] = (longitude >= 0.0 ? CH_E : CH_W);
+	c[4] = CH_BLANK;
+	c[3] = CH_BLANK;
+
+	longitude = fabs(longitude);
+	int hi = longitude;
+	int low = ((longitude - hi) * 100.0);
+	int r = hi * 100 + low;
+
+
+	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
+/* Редактирование временной зоны */
+void Display_EditTimezone(Display *display,
+						  double tz)
+{
+	const size_t n_places = 6;
+	Character c[n_places];
+	Dot d[n_places];
+
+	d[0] = DOT_OBSCURE;
+	d[1] = DOT_OBSCURE;
+	d[2] = DOT_HIGHLIGHT;
+	d[3] = DOT_OBSCURE;
+	d[4] = DOT_OBSCURE;
+	d[5] = DOT_OBSCURE;
+
+	c[5] = CH_Z;
+	c[4] = (tz > 0.0 ? CH_PLUS : CH_MINUS);
+	c[3] = CH_BLANK;
+
+	tz = fabs(tz);
+	int hi = tz;
+	int low = ((tz - hi) * 100.0);
+	int r = hi * 100 + low;
+
+	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+
+	DisplayWrite(display, c, d, n_places);
+	DisplaySync(display);
+}
+
 /* Редактировать дату */
 void Display_EditDate(Display *display,
 				  	  Timestamp *ts)
@@ -458,7 +708,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 512);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -488,7 +738,7 @@ void StartDefaultTask(void const * argument)
 	ws2812_init();
 
 	Beep();
-	SetBacklight(255, 255, 255);
+//	SetBacklight(255, 255, 255);
 
 	HAL_TIM_Base_Start(&htim5);
 	HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
@@ -496,7 +746,37 @@ void StartDefaultTask(void const * argument)
 
 	Wire_SetI2C(&hi2c1);
 	Rtc_DS3231_init(DS3231_INTCN);
+
 	Timestamp ts;
+	Rtc_DS3231_get(&ts);
+
+	Timestamp sun_rise1 = {0}, sun_set1 = {0};
+	Timestamp sun_rise2 = {0}, sun_set2 = {0};
+
+	double latitude_deg = DEFAULT_LATITUDE;
+	double longitude_deg = DEFAULT_LONGITUDE;
+	uint8_t tz_idx = MSK_ZONE;
+
+	double tz = TIMEZONES[tz_idx];
+	double latitude = latitude_deg * snm_DEG_TO_RAD;
+	double longitude = longitude_deg * snm_DEG_TO_RAD;
+
+	snm_Calculator calc;
+
+	snm_CalculatorCreate(&calc);
+	snm_CalculatorSetPoint(&calc, latitude, longitude);
+
+	if (ts.mday == 0 || ts.mon == 0 || ts.year < 2015) {
+		/* ... */
+		ts.mday = 1;
+		ts.mon = 1;
+		ts.year = 2015;
+
+		ts.hour = 0;
+		ts.min = 0;
+		ts.sec = 0;
+		Rtc_DS3231_set(ts);
+	}
 
 	/* Yep, these params are magic! */
 	KalmanFilterInit(&luminosity_filter,
@@ -524,8 +804,14 @@ void StartDefaultTask(void const * argument)
 	const uint32_t btn_repeat_delay = 1000u;
 	const uint32_t btn_fast_repeat_delay = 850u;
 
+	uint32_t btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+
 	int update_time = 0;
 	int update_aging = 0;
+	int update_latitude = 0;
+	int update_longitude = 0;
+	int update_timezone = 0;
+	int update_celestial = 0;
 
 	int8_t aging = Rtc_DS3231_get_aging();
 	uint8_t brightness = 200u;
@@ -536,21 +822,24 @@ void StartDefaultTask(void const * argument)
 
 	BTN_STATES btn1_state_curr = BTN1_STATE();
 	BTN_STATES btn2_state_curr = BTN2_STATE();
+	BTN_STATES btn3_state_curr = BTN3_STATE();
+	BTN_STATES btn4_state_curr = BTN4_STATE();
+	BTN_STATES btn5_state_curr = BTN5_STATE();
 	BTN_STATES btn6_state_curr = BTN6_STATE();
 	BTN_STATES btn7_state_curr = BTN7_STATE();
 	BTN_STATES btn8_state_curr = BTN8_STATE();
 
 	BTN_STATES btn1_state_prev = btn1_state_curr;
 	BTN_STATES btn2_state_prev = btn2_state_curr;
+	BTN_STATES btn3_state_prev = btn3_state_curr;
+	BTN_STATES btn4_state_prev = btn4_state_curr;
+	BTN_STATES btn5_state_prev = btn5_state_curr;
 	BTN_STATES btn6_state_prev = btn6_state_curr;
 	BTN_STATES btn7_state_prev = btn7_state_curr;
 	BTN_STATES btn8_state_prev = btn8_state_curr;
 
 	SetBrightness(brightness);
 
-	int v_prev = -1;
-	int v_curr = -1;
-	int v_lim = 255;
 	float lum;
 	float br = 0;
 
@@ -567,30 +856,84 @@ void StartDefaultTask(void const * argument)
 			HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
 		}
 
-		if (ts.hour >= 22) {
-			v_curr = (ts.min + 1) * 4;
-			if (v_prev != v_curr) {
-				SetBacklight((240-v_curr) % v_lim, v_curr % v_lim, 0);
-				v_prev = v_curr;
-			}
-		} else if (ts.hour <= 6) {
-			SetBacklight(0, 0, 255);
-		} else if (ts.hour <= 18) {
-			SetBacklight(255, 255, 255);
-		} else {
-			SetBacklight(100, 100, 100);
-		}
+//		if (ts.hour >= 22) {
+//			v_curr = (ts.min + 1) * 4;
+//			if (v_prev != v_curr) {
+//				SetBacklight((240-v_curr) % v_lim, v_curr % v_lim, 0);
+//				v_prev = v_curr;
+//			}
+//		} else if (ts.hour <= 6) {
+//			SetBacklight(0, 0, 255);
+//		} else if (ts.hour <= 18) {
+//			SetBacklight(255, 255, 255);
+//		} else {
+//			SetBacklight(100, 100, 100);
+//		}
 
 		btn1_state_curr = BTN1_STATE();
 		btn2_state_curr = BTN2_STATE();
+		btn3_state_curr = BTN3_STATE();
+		btn4_state_curr = BTN4_STATE();
+		btn5_state_curr = BTN5_STATE();
 		btn6_state_curr = BTN6_STATE();
 		btn7_state_curr = BTN7_STATE();
 		btn8_state_curr = BTN8_STATE();
+
+		if (sun_rise1.mday != ts.mday || update_celestial) {
+			struct tm rise, set;
+
+			snm_CalculatorSetTime(&calc, ts.mday, ts.mon, ts.year);
+			snm_CalculatorSetDate(&calc, ts.hour, ts.min, ts.sec);
+			snm_CalculatorSetPoint(&calc, latitude, longitude);
+
+			snm_CalculatorSetTwilight(&calc, HORIZON_34arcmin);
+			snm_CalculatorCalc(&calc);
+			rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
+			set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+
+			sun_rise1 = GetTimestampFromTm(rise);
+			sun_set1 = GetTimestampFromTm(set);
+
+			snm_CalculatorSetTwilight(&calc, TWILIGHT_CIVIL);
+			snm_CalculatorCalc(&calc);
+			rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
+			set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+
+			sun_rise2 = GetTimestampFromTm(rise);
+			sun_set2 = GetTimestampFromTm(set);
+			update_celestial = 0;
+		}
+
+		{
+			if ((ts.hour == 0 && ts.min == 0 && ts.sec == 0)
+					|| (ts.hour == sun_rise2.hour && ts.min < sun_rise2.min)) {
+				SetBacklight(255, 0, 0); // ночь
+			} else if ((ts.hour > sun_set2.hour)
+					|| (ts.hour == sun_set2.hour && ts.min > sun_set2.min)) {
+				SetBacklight(255, 0, 0); // ночь
+			} else
+			{
+				if ((ts.hour < sun_rise1.hour)
+						|| (ts.hour == sun_rise1.hour && ts.min < sun_rise1.min)) {
+					SetBacklight(255, 127, 0); // сумерки
+				} else if ((ts.hour > sun_set1.hour)
+						|| (ts.hour == sun_set1.hour && ts.min > sun_set1.min)) {
+					SetBacklight(255, 127, 0); // сумерки
+				} else {
+					SetBacklight(255, 255, 255); // день
+				}
+			}
+//			SetBacklight(255, 0, 0);
+//			SetBacklight(255, 255, 255);
+//			SetBacklight(255, 127, 0);
+//			SetBacklight(0, 0, 255);
+		}
 
 		switch (display_mode_curr) {
 		case DISPLAY_MODE_A1_1:
 			Rtc_DS3231_get(&ts);
 			Display_A1_1(&display, &ts);
+
 			{
 				if (btn1_state_prev != btn1_state_curr) {
 					btn1_state_prev = btn1_state_curr;
@@ -605,27 +948,66 @@ void StartDefaultTask(void const * argument)
 						display_mode_curr = DISPLAY_MODE_A1_2;
 						Beep();
 					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+				} /*else if (btn8_state_curr == BTN_DOWN) {
+					btn8_state_prev = btn8_state_curr;
+
+					int day = 9, month = 10, year = 2018;
+					int hour = 9, minute = 0, second = 0;
+
+					double latitude = 55.75 * snm_DEG_TO_RAD;
+					double longitude = 37.50 * snm_DEG_TO_RAD;
+					double tz = +3.0;
+
+					snm_Calculator calc;
+					struct tm sun_rise, moon_rise;
+					struct tm sun_set, moon_set;
+
+					snm_CalculatorCreate(&calc);
+					snm_CalculatorSetTime(&calc, day, month, year);
+					snm_CalculatorSetDate(&calc, hour, minute, second);
+					snm_CalculatorSetPoint(&calc, latitude, longitude);
+					snm_CalculatorSetTwilight(&calc, HORIZON_34arcmin);
+//					Beep();
+					snm_CalculatorCalc(&calc);
+//					Beep();
+
+					sun_rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
+					sun_set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+
+					moon_rise = snm_CalculatorGetDateAsTm(calc.moon_rise, tz);
+					moon_set = snm_CalculatorGetDateAsTm(calc.moon_set, tz);
+
+					Timestamp sun_rise2, sun_set2;
+					Timestamp moon_rise2, moon_set2;
+
+					sun_rise2.hour = sun_rise.tm_hour;
+					sun_rise2.min = sun_rise.tm_min;
+					sun_rise2.sec = sun_rise.tm_sec;
+
+					sun_rise2.mday = sun_rise.tm_mday;
+					sun_rise2.mon = sun_rise.tm_mon + 1;
+					sun_rise2.year = sun_rise.tm_year;
+
+					Display_S1_1(&display, &sun_rise2);
+				}*/ else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
 					btn8_pressed_counter = btn_fast_repeat_delay;
 					btn8_state_prev = btn8_state_curr;
 
 					if (btn8_state_curr == BTN_DOWN) {
-						if (brightness < 255) {
-//							SetBrightness(++brightness);
-							ws2812_pixel_rgb_to_buf_dma(brightness, 150, 0, 0);
-							HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
-						}
 					}
 				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
 					btn7_pressed_counter = btn_fast_repeat_delay;
 					btn7_state_prev = btn7_state_curr;
 
 					if (btn7_state_curr == BTN_DOWN) {
-						if (brightness) {
-//							SetBrightness(--brightness);
-							ws2812_pixel_rgb_to_buf_dma(brightness, 0, 150, 0);
-							HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
-						}
+					}
+				} else if (btn3_state_prev != btn3_state_curr) {
+					btn3_state_prev = btn3_state_curr;
+
+					if (btn3_state_curr == BTN_DOWN) {
+						display_mode_prev = display_mode_curr;
+						display_mode_curr = DISPLAY_MODE_S1_1;
+						Beep();
 					}
 				}
 			}
@@ -666,7 +1048,7 @@ void StartDefaultTask(void const * argument)
 
 					if (btn2_state_curr == BTN_DOWN) {
 						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_4;
+						display_mode_curr = DISPLAY_MODE_A1_1;
 						Beep();
 					}
 				}
@@ -674,33 +1056,143 @@ void StartDefaultTask(void const * argument)
 			break;
 
 		case DISPLAY_MODE_A1_4:
-			Rtc_DS3231_get(&ts);
-			Display_A1_4(&display, &ts);
-			{
-				if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
+//			Rtc_DS3231_get(&ts);
+//			Display_A1_4(&display, &ts);
+//			{
+//				if (btn2_state_prev != btn2_state_curr) {
+//					btn2_state_prev = btn2_state_curr;
+//
+//					if (btn2_state_curr == BTN_DOWN) {
+//						display_mode_prev = display_mode_curr;
+//						display_mode_curr = DISPLAY_MODE_A1_5;
+//						Beep();
+//					}
+//				}
+//			}
+			break;
 
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_5;
-						Beep();
+		case DISPLAY_MODE_A1_5:
+//			Rtc_DS3231_get(&ts);
+//			Display_A1_5(&display, &ts);
+//			{
+//				if (btn2_state_prev != btn2_state_curr) {
+//					btn2_state_prev = btn2_state_curr;
+//
+//					if (btn2_state_curr == BTN_DOWN) {
+//						display_mode_prev = display_mode_curr;
+//						display_mode_curr = DISPLAY_MODE_A1_1;
+//						Beep();
+//					}
+//				}
+//			}
+			break;
+
+		case DISPLAY_MODE_S1_1:
+			{
+				static uint32_t counter;
+				static uint8_t flip_flop;
+				uint32_t counter_curr;
+
+				if (counter == 0) {
+					counter = HAL_GetTick();
+				}
+
+				counter_curr = HAL_GetTick();
+
+				if (counter_curr - counter > 1000u) {
+					flip_flop = 1;
+					counter = 0;
+				}
+
+				if (flip_flop == 0) {
+					Display_S1_1_Msg(&display);
+				} else {
+					Display_S1_1(&display, &sun_rise1);
+				}
+
+				if (btn3_state_prev != btn3_state_curr) {
+					if (btn3_state_curr == BTN_DOWN) {
+						counter = 0;
+						flip_flop = 0;
+						display_mode_curr = DISPLAY_MODE_S1_2;
 					}
+
+					btn3_state_prev = btn3_state_curr;
+				}
+
+				if (btn1_state_prev != btn1_state_curr
+					|| btn2_state_prev != btn2_state_curr
+					|| btn4_state_prev != btn4_state_curr
+					|| btn5_state_prev != btn5_state_curr
+					|| btn6_state_prev != btn6_state_curr
+					|| btn7_state_prev != btn7_state_curr
+					|| btn8_state_prev != btn8_state_curr)
+				{
+					counter = 0;
+					flip_flop = 0;
+					display_mode_curr = display_mode_prev;
+//					btn1_state_prev = btn1_state_curr;
+					btn2_state_prev = btn2_state_curr;
+//					btn4_state_prev = btn4_state_curr;
+//					btn5_state_prev = btn5_state_curr;
+//					btn6_state_prev = btn6_state_curr;
+//					btn7_state_prev = btn7_state_curr;
+//					btn8_state_prev = btn8_state_curr;
 				}
 			}
 			break;
 
-		case DISPLAY_MODE_A1_5:
-			Rtc_DS3231_get(&ts);
-			Display_A1_5(&display, &ts);
+		case DISPLAY_MODE_S1_2:
 			{
-				if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
+				static uint32_t counter;
+				static uint8_t flip_flop;
+				uint32_t counter_curr;
 
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_1;
-						Beep();
+				if (counter == 0) {
+					counter = HAL_GetTick();
+				}
+
+				counter_curr = HAL_GetTick();
+
+				if (counter_curr - counter > 1000u) {
+					flip_flop = 1;
+					counter = 0;
+				}
+
+				if (flip_flop == 0) {
+					Display_S2_1_Msg(&display);
+				} else {
+					Display_S1_1(&display, &sun_set1);
+				}
+
+				if (btn3_state_prev != btn3_state_curr) {
+					if (btn3_state_curr == BTN_DOWN) {
+						counter = 0;
+						flip_flop = 0;
+						display_mode_curr = DISPLAY_MODE_S1_1;
 					}
+
+					btn3_state_prev = btn3_state_curr;
+				}
+
+				if (btn1_state_prev != btn1_state_curr
+					|| btn2_state_prev != btn2_state_curr
+					|| btn4_state_prev != btn4_state_curr
+					|| btn5_state_prev != btn5_state_curr
+					|| btn6_state_prev != btn6_state_curr
+					|| btn7_state_prev != btn7_state_curr
+					|| btn8_state_prev != btn8_state_curr)
+				{
+					counter = 0;
+					flip_flop = 0;
+					display_mode_curr = display_mode_prev;
+//					btn1_state_prev = btn1_state_curr;
+					btn2_state_prev = btn2_state_curr;
+//					btn4_state_prev = btn4_state_curr;
+//					btn5_state_prev = btn5_state_curr;
+//					btn6_state_prev = btn6_state_curr;
+//					btn7_state_prev = btn7_state_curr;
+//					btn8_state_prev = btn8_state_curr;
 				}
 			}
 			break;
@@ -715,6 +1207,7 @@ void StartDefaultTask(void const * argument)
 						if (update_time) {
 							Rtc_DS3231_set(ts);
 							update_time = 0;
+							update_celestial = 1;
 						}
 
 						display_mode_curr = display_mode_prev;
@@ -740,7 +1233,7 @@ void StartDefaultTask(void const * argument)
 				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
 					if (btn6_state_curr == BTN_DOWN) {
 						ts.hour += 1;
-						ts.hour %= 23;
+						ts.hour %= 24;
 						update_time = 1;
 					}
 
@@ -750,6 +1243,8 @@ void StartDefaultTask(void const * argument)
 					if (btn2_state_curr == BTN_DOWN) {
 						display_mode_curr = DISPLAY_MODE_EDIT_AGING;
 					}
+
+					btn2_state_prev = btn2_state_curr;
 				}
 			}
 			break;
@@ -764,6 +1259,7 @@ void StartDefaultTask(void const * argument)
 						if (update_time) {
 							Rtc_DS3231_set(ts);
 							update_time = 0;
+							update_celestial = 1;
 						}
 
 						display_mode_curr = display_mode_prev;
@@ -794,6 +1290,8 @@ void StartDefaultTask(void const * argument)
 
 		case DISPLAY_MODE_EDIT_AGING:
 			{
+				Display_EditAging(&display, aging);
+
 				if (btn1_state_prev != btn1_state_curr) {
 					btn1_state_prev = btn1_state_curr;
 
@@ -806,23 +1304,199 @@ void StartDefaultTask(void const * argument)
 
 					display_mode_curr = display_mode_prev;
 				} else {
-					if  (btn8_state_prev != btn8_state_curr) {
+					if (btn8_state_prev != btn8_state_curr) {
 						if (btn8_state_curr == BTN_DOWN) {
 							--aging;
 							update_aging = 1;
 						}
 
 						btn8_state_prev = btn8_state_curr;
-					} else if  (btn7_state_prev != btn7_state_curr) {
+					} else if (btn7_state_prev != btn7_state_curr) {
 						if (btn7_state_curr == BTN_DOWN) {
 							++aging;
 							update_aging = 1;
 						}
 
 						btn7_state_prev = btn7_state_curr;
+					} else if (btn2_state_prev != btn2_state_curr) {
+						if (btn2_state_curr == BTN_DOWN) {
+							display_mode_curr = DISPLAY_MODE_EDIT_LATITUDE;
+						}
+
+						btn2_state_prev = btn2_state_curr;
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_LATITUDE:
+			{
+				Display_EditLatitude(&display, latitude_deg);
+
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_latitude) {
+							/* TODO: save latitude to flash */
+							update_latitude = 0;
+							update_celestial = 1;
+						}
 					}
 
-					Display_EditAging(&display, aging);
+					display_mode_curr = display_mode_prev;
+				} else {
+					if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+						if (btn8_state_curr == BTN_DOWN) {
+							if (latitude_deg > -90.00)
+								latitude_deg -= 0.01;
+
+							latitude = latitude_deg * snm_DEG_TO_RAD;
+							update_latitude = 1;
+						} else {
+							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+						}
+
+						btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
+						btn_fast_repeat_delay_accelerated += 10;
+						btn8_state_prev = btn8_state_curr;
+					} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+						if (btn7_state_curr == BTN_DOWN) {
+							if (latitude_deg < +90.00)
+								latitude_deg += 0.01;
+
+							latitude = latitude_deg * snm_DEG_TO_RAD;
+							update_latitude = 1;
+						} else {
+							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+						}
+
+						btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
+						btn_fast_repeat_delay_accelerated += 10;
+						btn7_state_prev = btn7_state_curr;
+					} else if (btn2_state_prev != btn2_state_curr) {
+						if (btn2_state_curr == BTN_DOWN) {
+							display_mode_curr = DISPLAY_MODE_EDIT_LONGITUDE;
+						}
+
+						btn2_state_prev = btn2_state_curr;
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_LONGITUDE:
+			{
+				Display_EditLongitude(&display, longitude_deg);
+
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_longitude) {
+							/* TODO: save longitude to flash */
+							update_longitude = 0;
+							update_celestial = 1;
+						}
+					}
+
+					display_mode_curr = display_mode_prev;
+				} else {
+					if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+						if (btn8_state_curr == BTN_DOWN) {
+							if (longitude_deg > -180.00)
+								longitude_deg -= 0.01;
+
+							longitude = longitude_deg * snm_DEG_TO_RAD;
+							update_longitude = 1;
+						} else {
+							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+						}
+
+						btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
+						btn_fast_repeat_delay_accelerated += 10;
+						btn8_state_prev = btn8_state_curr;
+					} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+						if (btn7_state_curr == BTN_DOWN) {
+							if (longitude_deg < +180.00)
+								longitude_deg += 0.01;
+
+							longitude = longitude_deg * snm_DEG_TO_RAD;
+							update_longitude = 1;
+						} else {
+							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+						}
+
+						btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
+						btn_fast_repeat_delay_accelerated += 10;
+						btn7_state_prev = btn7_state_curr;
+					} else if (btn2_state_prev != btn2_state_curr) {
+						if (btn2_state_curr == BTN_DOWN) {
+							display_mode_curr = DISPLAY_MODE_EDIT_TIMEZONE;
+						}
+
+						btn2_state_prev = btn2_state_curr;
+					}
+				}
+			}
+			break;
+
+		case DISPLAY_MODE_EDIT_TIMEZONE:
+			{
+				Display_EditTimezone(&display, tz);
+
+				if (btn1_state_prev != btn1_state_curr) {
+					btn1_state_prev = btn1_state_curr;
+
+					if (btn1_state_curr == BTN_UP) {
+						if (update_timezone) {
+							/* TODO: save tz_idx to flash */
+//							HAL_StatusTypeDef flash_ok;
+//
+//							flash_ok = HAL_ERROR;
+//							while(flash_ok != HAL_OK) {
+//								flash_ok = HAL_FLASH_Unlock();
+//							}
+//
+//							flash_ok = HAL_ERROR;
+//							while(flash_ok != HAL_OK) {
+//								flash_ok = HAL_FLASH_Program(TYPEPROGRAM_BYTE, 0x08100000, 0x7777);
+//							}
+//
+//							flash_ok = HAL_ERROR;
+//							while(flash_ok != HAL_OK) {
+//								flash_ok = HAL_FLASH_Lock();
+//							}
+							update_timezone = 0;
+							update_celestial = 1;
+						}
+					}
+
+					display_mode_curr = display_mode_prev;
+				} else {
+					if (btn8_state_prev != btn8_state_curr) {
+						if (btn8_state_curr == BTN_DOWN) {
+							tz_idx = (tz_idx-1) % N_TIMEZONES;
+							tz = TIMEZONES[tz_idx];
+							update_timezone = 1;
+						}
+
+						btn8_state_prev = btn8_state_curr;
+					} else if (btn7_state_prev != btn7_state_curr) {
+						if (btn7_state_curr == BTN_DOWN) {
+							tz_idx = (tz_idx+1) % N_TIMEZONES;
+							tz = TIMEZONES[tz_idx];
+							update_timezone = 1;
+						}
+
+						btn7_state_prev = btn7_state_curr;
+					} else if (btn2_state_prev != btn2_state_curr) {
+						if (btn2_state_curr == BTN_DOWN) {
+							display_mode_curr = DISPLAY_MODE_EDIT_AGING;
+						}
+
+						btn2_state_prev = btn2_state_curr;
+					}
 				}
 			}
 			break;

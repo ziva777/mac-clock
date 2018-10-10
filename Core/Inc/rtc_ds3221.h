@@ -10,6 +10,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 
 #define SECONDS_FROM_1970_TO_2000 946684800
 
@@ -94,6 +95,6 @@ void Rtc_DS3231_get_a2(char *buf,
 void Rtc_DS3231_clear_a2f(void);
 uint8_t Rtc_DS3231_triggered_a2(void);
 
-
+Timestamp GetTimestampFromTm(struct tm tm);
 
 #endif /* INC_RTC_DS3221_H_ */
