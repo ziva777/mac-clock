@@ -7,6 +7,48 @@
 #define snm_RAD_TO_DEG  (180.0 / M_PI)
 #define snm_DEG_TO_RAD  (1.0 / snm_RAD_TO_DEG)
 
+static double TIMEZONES[] = {
+    -12.00,
+    -11.00,
+    -10.00,
+    -09.3001,
+    -09.00,
+    -08.00,
+    -07.00,
+    -06.00,
+    -05.00,
+    -04.00,
+    -03.3001,
+    -03.00,
+    -02.00,
+    -01.00,
+    +00.00,
+    +01.00,
+    +02.00,
+    +03.00,
+    +03.3001,
+    +04.00,
+    +04.3001,
+    +05.00,
+    +05.3001,
+    +05.4501,
+    +06.00,
+    +06.3001,
+    +07.00,
+    +08.00,
+    +08.4501,
+    +09.00,
+    +09.3001,
+    +10.00,
+    +10.3001,
+    +11.00,
+    +12.00,
+    +12.4501,
+    +13.00,
+    +14.00,
+};
+static const uint8_t N_TIMEZONES = sizeof(TIMEZONES) / sizeof(TIMEZONES[0]);
+static const uint8_t MSK_ZONE = 17;
 
 /* The set of twilights to calculate (types of rise/set events).
  */

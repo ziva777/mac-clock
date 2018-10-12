@@ -329,9 +329,9 @@ uint8_t Rtc_DS3231_triggered_a2(void)
     return Rtc_DS3231_get_sreg() & DS3231_A2F;
 }
 
-Timestamp GetTimestampFromTm(struct tm tm)
+Rtc_Timestamp GetTimestampFromTm(struct tm tm)
 {
-	Timestamp ret;
+	Rtc_Timestamp ret;
 
 	ret.hour = tm.tm_hour;
 	ret.min = tm.tm_min;

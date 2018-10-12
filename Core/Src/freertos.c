@@ -22,24 +22,24 @@
   *    this list of conditions and the following disclaimer in the documentation
   *    and/or other materials provided with the distribution.
   * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
+  *    contributors to this software may be used to endorse or promote products
   *    derived from this software without specific written permission.
   * 4. This software, including modifications and/or derivative works of this 
   *    software, must execute solely and exclusively on microcontroller or
   *    microprocessor devices manufactured by or for STMicroelectronics.
   * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
+  *    this license is void and will automatically terminate your rights under
   *    this license. 
   *
   * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
   * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
   * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
   * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
+  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT
   * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
   * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
   * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
   * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
   * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
   * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -55,7 +55,7 @@
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+/* USER CODE BEGIN Includes */     
 #include <stdlib.h>
 
 #include "stm32f4xx_hal.h"
@@ -87,28 +87,34 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
+typedef int32_t BMP280_S32_t;
+typedef uint32_t BMP280_U32_t;
+
 typedef enum {
     BTN_UP = GPIO_PIN_SET,
     BTN_DOWN = GPIO_PIN_RESET
 } BTN_STATES;
 
 typedef enum {
-	DISPLAY_MODE_A1_1,
-	DISPLAY_MODE_A1_2,
-	DISPLAY_MODE_A1_3,
-	DISPLAY_MODE_A1_4,
-	DISPLAY_MODE_A1_5,
+    DISPLAY_MODE_A1_1,
+    DISPLAY_MODE_A1_2,
+    DISPLAY_MODE_A1_3,
+//  DISPLAY_MODE_A1_4,
+//  DISPLAY_MODE_A1_5,
 
-	DISPLAY_MODE_S1_1,
-	DISPLAY_MODE_S1_2,
+    DISPLAY_MODE_S1_1,
+    DISPLAY_MODE_S1_2,
 
-	DISPLAY_MODE_EDIT_TIME_1,
-	DISPLAY_MODE_EDIT_TIME_2,
-	DISPLAY_MODE_EDIT_AGING,
-	DISPLAY_MODE_EDIT_LATITUDE,
-	DISPLAY_MODE_EDIT_LONGITUDE,
-	DISPLAY_MODE_EDIT_TIMEZONE,
-	DISPLAY_MODE_EDIT_DATE
+    DISPLAY_MODE_P1_1,
+
+    DISPLAY_MODE_EDIT_TIME_1,
+    DISPLAY_MODE_EDIT_TIME_2,
+    DISPLAY_MODE_EDIT_AGING,
+    DISPLAY_MODE_EDIT_LATITUDE,
+    DISPLAY_MODE_EDIT_LONGITUDE,
+    DISPLAY_MODE_EDIT_TIMEZONE,
+    DISPLAY_MODE_EDIT_DATE
 } DISPLAY_MODES;
 /* USER CODE END PTD */
 
@@ -119,8 +125,8 @@ typedef enum {
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define DEFAULT_LATITUDE  	55.75
-#define DEFAULT_LONGITUDE  	37.50
+#define DEFAULT_LATITUDE    55.75
+#define DEFAULT_LONGITUDE   37.50
 
 #define BTN1_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN0_GPIO_Port, BTN0_Pin)
 #define BTN2_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN1_GPIO_Port, BTN1_Pin)
@@ -134,50 +140,20 @@ typedef enum {
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-static KalmanFilter luminosity_filter;
+BMP280_S32_t t_fine;
+uint16_t dig_T1 = 27936;
+int16_t  dig_T2 = 26726;
+int16_t  dig_T3 = 50;
 
-static double TIMEZONES[] = {
-    -12.00,
-    -11.00,
-    -10.00,
-    -09.3001,
-    -09.00,
-    -08.00,
-    -07.00,
-    -06.00,
-    -05.00,
-    -04.00,
-    -03.3001,
-    -03.00,
-    -02.00,
-    -01.00,
-    +00.00,
-    +01.00,
-    +02.00,
-    +03.00,
-    +03.3001,
-    +04.00,
-    +04.3001,
-    +05.00,
-    +05.3001,
-    +05.4501,
-    +06.00,
-    +06.3001,
-    +07.00,
-    +08.00,
-    +08.4501,
-    +09.00,
-    +09.3001,
-    +10.00,
-    +10.3001,
-    +11.00,
-    +12.00,
-    +12.4501,
-    +13.00,
-    +14.00,
-};
-static const uint8_t N_TIMEZONES = sizeof(TIMEZONES) / sizeof(TIMEZONES[0]);
-static const uint8_t MSK_ZONE = 17;
+uint16_t dig_P1 = 38285;
+int16_t  dig_P2 = -10543;
+int16_t  dig_P3 = 3024;
+int16_t  dig_P4 = 8470;
+int16_t  dig_P5 = -110;
+int16_t  dig_P6 = -7;
+int16_t  dig_P7 = 15500;
+int16_t  dig_P8 = -14600;
+int16_t  dig_P9 = 6000;
 
 osThreadId modbus_task_handle;
 /* USER CODE END Variables */
@@ -185,6 +161,51 @@ osThreadId defaultTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+
+// Returns temperature in DegC, resolution is 0.01 DegC. Output value of “5123” equals 51.23 DegC.
+// t_fine carries fine temperature as global value
+BMP280_S32_t bmp280_compensate_T_int32(BMP280_S32_t adc_T)
+{
+    BMP280_S32_t var1, var2, T;
+
+    var1 = ((((adc_T>>3) - ((BMP280_S32_t)dig_T1<<1))) * ((BMP280_S32_t)dig_T2)) >> 11;
+    var2 = (((((adc_T>>4) - ((BMP280_S32_t)dig_T1)) * ((adc_T>>4) - ((BMP280_S32_t)dig_T1))) >> 12) * ((BMP280_S32_t)dig_T3)) >> 14;
+    t_fine = var1 + var2;
+    T = (t_fine * 5 + 128) >> 8;
+    return T;
+}
+
+// Returns pressure in Pa as unsigned 32 bit integer. Output value of “96386” equals 96386 Pa = 963.86 hPa
+BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P)
+{
+    BMP280_S32_t var1, var2;
+    BMP280_U32_t p;
+
+    var1 = (((BMP280_S32_t)t_fine)>>1) - (BMP280_S32_t)64000;
+    var2 = (((var1>>2) * (var1>>2)) >> 11 ) * ((BMP280_S32_t)dig_P6);
+    var2 = var2 + ((var1*((BMP280_S32_t)dig_P5))<<1);
+    var2 = (var2>>2)+(((BMP280_S32_t)dig_P4)<<16);
+    var1 = (((dig_P3 * (((var1>>2) * (var1>>2)) >> 13 )) >> 3) + ((((BMP280_S32_t)dig_P2) * var1)>>1))>>18;
+    var1 =((((32768+var1))*((BMP280_S32_t)dig_P1))>>15);
+
+    if (var1 == 0) {
+        return 0; // avoid exception caused by division by zero
+    }
+
+    p = (((BMP280_U32_t)(((BMP280_S32_t)1048576)-adc_P)-(var2>>12)))*3125;
+
+    if (p < 0x80000000) {
+        p = (p << 1) / ((BMP280_U32_t)var1);
+    } else {
+        p = (p / (BMP280_U32_t)var1) * 2;
+    }
+
+    var1 = (((BMP280_S32_t)dig_P9) * ((BMP280_S32_t)(((p>>3) * (p>>3))>>13)))>>12;
+    var2 = (((BMP280_S32_t)(p>>2)) * ((BMP280_S32_t)dig_P8))>>13;
+    p = (BMP280_U32_t)((BMP280_S32_t)p + ((var1 + var2 + dig_P7) >> 4));
+    return p;
+}
+
 /* Установка яркости */
 static
 void SetBrightness(uint16_t br)
@@ -193,28 +214,37 @@ void SetBrightness(uint16_t br)
     HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
 }
 
+/* Включить PWM для индикатора */
+static
+void SetBrightnessOn()
+{
+    HAL_TIM_Base_Start(&htim5);
+    HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+}
+
+/* Установка цвета фоновой подстветки */
 static
 void SetBacklight(uint8_t r, uint8_t g, uint8_t b)
 {
-	static uint8_t R, G, B;
+    static uint8_t R, G, B;
 
-	if (r != R || g != G || b != B) {
-		R = r;
-		G = g;
-		B = b;
+    if (r != R || g != G || b != B) {
+        R = r;
+        G = g;
+        B = b;
 
-		ws2812_pixel_rgb_to_buf_dma(r, g, b, 0);
-		ws2812_pixel_rgb_to_buf_dma(r, g, b, 1);
-		HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
-	}
+        ws2812_pixel_rgb_to_buf_dma(r, g, b, 0);
+        ws2812_pixel_rgb_to_buf_dma(r, g, b, 1);
+        HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, BUF_DMA, ARRAY_LEN);
+    }
 }
 
 /* Бип */
 void Beep()
 {
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-	HAL_Delay(10);
-	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+    HAL_Delay(10);
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
 }
 
 static const uint8_t BR_MIN = 1u;        /* Abs brightness minimum */
@@ -239,444 +269,647 @@ float calc_brightness_linear(float l,
 
 /* Отобразить восход солнца чч.мм */
 void Display_S1_1(Display *display,
-				  Timestamp *ts)
+                  Rtc_Timestamp *ts)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	uint8_t h1, h2;
-	uint8_t m1, m2;
+    uint8_t h1, h2;
+    uint8_t m1, m2;
 
-	h1 = ts->hour / 10;
-	h2 = ts->hour % 10;
-	h1 += 0x30;
-	h2 += 0x30;
+    h1 = ts->hour / 10;
+    h2 = ts->hour % 10;
+    h1 += 0x30;
+    h2 += 0x30;
 
-	c[4 - 1] = AsciiToCharacter((char) h2);
+    c[4 - 1] = AsciiToCharacter((char) h2);
 
-	if (h1 != 0x30)
-		c[5 - 1] = AsciiToCharacter((char) h1);
-	else
-		c[5 - 1] = CH_BLANK;
+    if (h1 != 0x30)
+        c[5 - 1] = AsciiToCharacter((char) h1);
+    else
+        c[5 - 1] = CH_BLANK;
 
-	m1 = ts->min / 10;
-	m2 = ts->min % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2 - 1] = AsciiToCharacter((char) m2);
-	c[3 - 1] = AsciiToCharacter((char) m1);
+    m1 = ts->min / 10;
+    m2 = ts->min % 10;
+    m1 += 0x30;
+    m2 += 0x30;
+    c[2 - 1] = AsciiToCharacter((char) m2);
+    c[3 - 1] = AsciiToCharacter((char) m1);
 
-	c[0] = AsciiToCharacter((char) ' ');
-	c[5] = CH_BLANK;
+    c[0] = AsciiToCharacter((char) ' ');
+    c[5] = CH_BLANK;
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = DOT_HIGHLIGHT;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_HIGHLIGHT;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Отобразить сообщение */
 void Display_Msg(Display *display,
-				 Character msg[],
-				 size_t n_places)
+                 Character msg[],
+                 size_t n_places)
 {
-//	const size_t n_places = 6;
-	Dot d[n_places];
+//  const size_t n_places = 6;
+    Dot d[n_places];
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	DisplayWrite(display, msg, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, msg, d, n_places);
+    DisplaySync(display);
 }
 
 /* Отобразить восход солнца (сообщение) */
 void Display_S1_1_Msg(Display *display)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
 
-	c[5] = CH_B;
-	c[4] = CH_O;
-	c[3] = CH_C;
-	c[2] = CH_X;
-	c[1] = CH_O;
-	c[0] = CH_D_rus;
+    c[5] = CH_B;
+    c[4] = CH_O;
+    c[3] = CH_C;
+    c[2] = CH_X;
+    c[1] = CH_O;
+    c[0] = CH_D_rus;
 
-	Display_Msg(display, c, n_places);
+    Display_Msg(display, c, n_places);
 }
 
 /* Отобразить заход солнца (сообщение) */
 void Display_S2_1_Msg(Display *display)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
 
-	c[5] = CH_3;
-	c[4] = CH_A;
-	c[3] = CH_X;
-	c[2] = CH_O;
-	c[1] = CH_D_rus;
-	c[0] = CH_BLANK;
+    c[5] = CH_3;
+    c[4] = CH_A;
+    c[3] = CH_X;
+    c[2] = CH_O;
+    c[1] = CH_D_rus;
+    c[0] = CH_BLANK;
 
-	Display_Msg(display, c, n_places);
+    Display_Msg(display, c, n_places);
+}
+
+/* Отобразить давление */
+void Display_P1(Display *display,
+                uint16_t pressure)
+{
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
+
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_HIGHLIGHT;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
+
+    c[5] = CH_P;
+    c[4] = CH_r;
+    c[3] = CH_BLANK;
+
+    Character tmp;
+
+    tmp = AsciiToCharacter((int)(pressure / 1000) % 10 + 0x30);
+    c[3] = (tmp != CH_0 ? tmp : CH_BLANK);
+
+    tmp = AsciiToCharacter((int)(pressure / 100) % 10 + 0x30);
+    c[2] = (tmp != CH_0 ? tmp : CH_BLANK);
+
+    c[1] = AsciiToCharacter((int)(pressure / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((int)(pressure / 1) % 10 + 0x30);
+
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Отобразить чч.мм.сс */
 void Display_A1_1(Display *display,
-				  Timestamp *ts)
+                  Rtc_Timestamp *ts)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	uint8_t h1, h2;
-	uint8_t m1, m2;
-	uint8_t s1, s2;
+    uint8_t h1, h2;
+    uint8_t m1, m2;
+    uint8_t s1, s2;
 
-	h1 = ts->hour / 10;
-	h2 = ts->hour % 10;
-	h1 += 0x30;
-	h2 += 0x30;
-	c[4] = AsciiToCharacter((char) h2);
+    h1 = ts->hour / 10;
+    h2 = ts->hour % 10;
+    h1 += 0x30;
+    h2 += 0x30;
+    c[4] = AsciiToCharacter((char) h2);
 
-	if (h1 != 0x30)
-		c[5] = AsciiToCharacter((char) h1);
-	else
-		c[5] = CH_BLANK;
+    if (h1 != 0x30)
+        c[5] = AsciiToCharacter((char) h1);
+    else
+        c[5] = CH_BLANK;
 
-	m1 = ts->min / 10;
-	m2 = ts->min % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2] = AsciiToCharacter((char) m2);
-	c[3] = AsciiToCharacter((char) m1);
+    m1 = ts->min / 10;
+    m2 = ts->min % 10;
+    m1 += 0x30;
+    m2 += 0x30;
+    c[2] = AsciiToCharacter((char) m2);
+    c[3] = AsciiToCharacter((char) m1);
 
-	s1 = ts->sec / 10;
-	s2 = ts->sec % 10;
-	s1 += 0x30;
-	s2 += 0x30;
-	c[0] = AsciiToCharacter((char) s2);
-	c[1] = AsciiToCharacter((char) s1);
+    s1 = ts->sec / 10;
+    s2 = ts->sec % 10;
+    s1 += 0x30;
+    s2 += 0x30;
+    c[0] = AsciiToCharacter((char) s2);
+    c[1] = AsciiToCharacter((char) s1);
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_HIGHLIGHT;
+    d[5] = DOT_OBSCURE;
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Отобразить чч.мм с мигающим индикатором */
 void Display_A1_2(Display *display,
-				  Timestamp *ts)
+                  Rtc_Timestamp *ts)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	uint8_t h1, h2;
-	uint8_t m1, m2;
+    uint8_t h1, h2;
+    uint8_t m1, m2;
 
-	h1 = ts->hour / 10;
-	h2 = ts->hour % 10;
-	h1 += 0x30;
-	h2 += 0x30;
+    h1 = ts->hour / 10;
+    h2 = ts->hour % 10;
+    h1 += 0x30;
+    h2 += 0x30;
 
-	c[4 - 1] = AsciiToCharacter((char) h2);
+    c[4 - 1] = AsciiToCharacter((char) h2);
 
-	if (h1 != 0x30)
-		c[5 - 1] = AsciiToCharacter((char) h1);
-	else
-		c[5 - 1] = CH_BLANK;
+    if (h1 != 0x30)
+        c[5 - 1] = AsciiToCharacter((char) h1);
+    else
+        c[5 - 1] = CH_BLANK;
 
-	m1 = ts->min / 10;
-	m2 = ts->min % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2 - 1] = AsciiToCharacter((char) m2);
-	c[3 - 1] = AsciiToCharacter((char) m1);
+    m1 = ts->min / 10;
+    m2 = ts->min % 10;
+    m1 += 0x30;
+    m2 += 0x30;
+    c[2 - 1] = AsciiToCharacter((char) m2);
+    c[3 - 1] = AsciiToCharacter((char) m1);
 
-	c[0] = AsciiToCharacter((char) ' ');
-	c[5] = AsciiToCharacter((char) ' ');
+    c[0] = AsciiToCharacter((char) ' ');
+    c[5] = AsciiToCharacter((char) ' ');
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = (ts->sec % 2 == 0 ? DOT_HIGHLIGHT : DOT_OBSCURE);
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_OBSCURE;
+    d[3] = (ts->sec % 2 == 0 ? DOT_HIGHLIGHT : DOT_OBSCURE);
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Отобразить дд.ММ.гг */
 void Display_A1_3(Display *display,
-				  Timestamp *ts)
+                  Rtc_Timestamp *ts)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	uint8_t h1, h2;
-	uint8_t m1, m2;
-	uint8_t s1, s2;
+    uint8_t h1, h2;
+    uint8_t m1, m2;
+    uint8_t s1, s2;
 
-	h1 = ts->mday / 10;
-	h2 = ts->mday % 10;
-	h1 += 0x30;
-	h2 += 0x30;
-	c[4] = AsciiToCharacter((char) h2);
+    h1 = ts->mday / 10;
+    h2 = ts->mday % 10;
+    h1 += 0x30;
+    h2 += 0x30;
+    c[4] = AsciiToCharacter((char) h2);
 
-	if (h1 != 0x30)
-		c[5] = AsciiToCharacter((char) h1);
-	else
-		c[5] = CH_BLANK;
+    if (h1 != 0x30)
+        c[5] = AsciiToCharacter((char) h1);
+    else
+        c[5] = CH_BLANK;
 
-	m1 = ts->mon / 10;
-	m2 = ts->mon % 10;
-	m1 += 0x30;
-	m2 += 0x30;
-	c[2] = AsciiToCharacter((char) m2);
-	c[3] = AsciiToCharacter((char) m1);
+    m1 = ts->mon / 10;
+    m2 = ts->mon % 10;
+    m1 += 0x30;
+    m2 += 0x30;
+    c[2] = AsciiToCharacter((char) m2);
+    c[3] = AsciiToCharacter((char) m1);
 
-	s1 = (ts->year % 100) / 10;
-	s2 = (ts->year % 100) % 10;
-	s1 += 0x30;
-	s2 += 0x30;
-	c[0] = AsciiToCharacter((char) s2);
-	c[1] = AsciiToCharacter((char) s1);
+    s1 = (ts->year % 100) / 10;
+    s2 = (ts->year % 100) % 10;
+    s1 += 0x30;
+    s2 += 0x30;
+    c[0] = AsciiToCharacter((char) s2);
+    c[1] = AsciiToCharacter((char) s1);
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_HIGHLIGHT;
+    d[5] = DOT_OBSCURE;
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
-}
-
-/* Отобразить чередование чч.мм.сс и дд.ММ.гг */
-void Display_A1_4(Display *display,
-				  Timestamp *ts)
-{
-	static int flip_flop = 0;
-	static int counter = 0;
-	static const int counter_max = 5;
-	static int sec_prev = 0;
-
-	if (sec_prev != ts->sec) {
-		sec_prev = ts->sec;
-
-		if (++counter == counter_max) {
-			counter = 0;
-			++flip_flop;
-		}
-
-		if (flip_flop % 2) {
-			Display_A1_1(display, ts);
-		} else {
-			Display_A1_3(display, ts);
-		}
-	}
-}
-
-/* Отобразить чередование чч.мм и дд.ММ.гг */
-void Display_A1_5(Display *display,
-				  Timestamp *ts)
-{
-	static int flip_flop = 0;
-	static int counter = 0;
-	static const int counter_max = 5;
-	static int sec_prev = 0;
-
-	if (sec_prev != ts->sec) {
-		sec_prev = ts->sec;
-
-		if (++counter == counter_max) {
-			counter = 0;
-			++flip_flop;
-		}
-
-		if (flip_flop % 2) {
-			Display_A1_2(display, ts);
-		} else {
-			Display_A1_3(display, ts);
-		}
-	}
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Редактировать время в формате чч.мм.сс */
 void Display_EditTime1(Display *display,
-				  	   Timestamp *ts)
+                       Rtc_Timestamp *ts)
 {
-	Display_A1_1(display, ts);
+    Display_A1_1(display, ts);
 }
 
 /* Редактировать время в формате чч.мм */
 void Display_EditTime2(Display *display,
-				  	   Timestamp *ts)
+                       Rtc_Timestamp *ts)
 {
-	Display_A1_2(display, ts);
+    Display_A1_2(display, ts);
 }
 
 /* Отобразить параметр точной настройки */
 void Display_EditAging(Display *display,
-					   int8_t aging)
+                       int8_t aging)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_OBSCURE;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_HIGHLIGHT;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_HIGHLIGHT;
+    d[5] = DOT_OBSCURE;
 
-	c[5] = CH_A;
-	c[4] = CH_G;
-	c[3] = CH_BLANK;
+    c[5] = CH_A;
+    c[4] = CH_G;
+    c[3] = CH_BLANK;
 
-	if (aging < 0) {
-		c[3] = CH_MINUS;
-		aging = abs(aging);
-	}
+    if (aging < 0) {
+        c[3] = CH_MINUS;
+        aging = abs(aging);
+    }
 
-	c[2] = AsciiToCharacter((aging / 100) % 10 + 0x30);
-	c[1] = AsciiToCharacter((aging / 10) % 10 + 0x30);
-	c[0] = AsciiToCharacter((aging / 1) % 10 + 0x30);
+    c[2] = AsciiToCharacter((aging / 100) % 10 + 0x30);
+    c[1] = AsciiToCharacter((aging / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((aging / 1) % 10 + 0x30);
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Редактирование широты (-90.00 ... +90.00) */
 void Display_EditLatitude(Display *display,
-						  double latitude)
+                          double latitude)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	c[5] = (latitude > 0.0 ? CH_N : CH_S);
-	c[4] = CH_BLANK;
-	c[3] = CH_BLANK;
+    c[5] = (latitude > 0.0 ? CH_N : CH_S);
+    c[4] = CH_BLANK;
+    c[3] = CH_BLANK;
 
-	latitude = fabs(latitude);
-	int hi = latitude;
-	int low = ((latitude - hi) * 100.0);
-	int r = hi * 100 + low;
+    latitude = fabs(latitude);
+    int hi = latitude;
+    int low = ((latitude - hi) * 100.0);
+    int r = hi * 100 + low;
 
 
-	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
-	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
-	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
-	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+    c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+    c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+    c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Редактирование долготы (-180.00 ... +180.00) */
 void Display_EditLongitude(Display *display,
-						   double longitude)
+                           double longitude)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	c[5] = (longitude >= 0.0 ? CH_E : CH_W);
-	c[4] = CH_BLANK;
-	c[3] = CH_BLANK;
+    c[5] = (longitude >= 0.0 ? CH_E : CH_W);
+    c[4] = CH_BLANK;
+    c[3] = CH_BLANK;
 
-	longitude = fabs(longitude);
-	int hi = longitude;
-	int low = ((longitude - hi) * 100.0);
-	int r = hi * 100 + low;
+    longitude = fabs(longitude);
+    int hi = longitude;
+    int low = ((longitude - hi) * 100.0);
+    int r = hi * 100 + low;
 
 
-	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
-	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
-	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
-	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+    c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+    c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+    c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Редактирование временной зоны */
 void Display_EditTimezone(Display *display,
-						  double tz)
+                          double tz)
 {
-	const size_t n_places = 6;
-	Character c[n_places];
-	Dot d[n_places];
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
 
-	d[0] = DOT_OBSCURE;
-	d[1] = DOT_OBSCURE;
-	d[2] = DOT_HIGHLIGHT;
-	d[3] = DOT_OBSCURE;
-	d[4] = DOT_OBSCURE;
-	d[5] = DOT_OBSCURE;
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
 
-	c[5] = CH_Z;
-	c[4] = (tz > 0.0 ? CH_PLUS : CH_MINUS);
-	c[3] = CH_BLANK;
+    c[5] = CH_Z;
+    c[4] = (tz > 0.0 ? CH_PLUS : CH_MINUS);
+    c[3] = CH_BLANK;
 
-	tz = fabs(tz);
-	int hi = tz;
-	int low = ((tz - hi) * 100.0);
-	int r = hi * 100 + low;
+    tz = fabs(tz);
+    int hi = tz;
+    int low = ((tz - hi) * 100.0);
+    int r = hi * 100 + low;
 
-	c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
-	c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
-	c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
-	c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+    c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+    c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+    c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
 
-	DisplayWrite(display, c, d, n_places);
-	DisplaySync(display);
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
 }
 
 /* Редактировать дату */
 void Display_EditDate(Display *display,
-				  	  Timestamp *ts)
+                      Rtc_Timestamp *ts)
 {
-	Display_A1_3(display, ts);
+    Display_A1_3(display, ts);
 }
 
+uint16_t to_U_LE(uint16_t value) {
+    return (value >> 8) | (value << 8);
+}
+
+
 void ModbusTask(void const * argument);
+
+/*
+ * FSM luminosity
+ */
+typedef struct {
+	KalmanFilter luminosity_filter;
+    float lum;
+    float br;
+} FsmLuminosity;
+
+void FsmLuminosityCreate(FsmLuminosity *fsm)
+{
+	/* Yep, these params are magic! */
+	KalmanFilterInit(&fsm->luminosity_filter,
+					 4000.0f,
+					 4000.0f,
+					 0.125f);
+	LuminositySensorCreate(&luminosity_sensor);
+	LuminositySensorBegin(&luminosity_sensor);
+}
+
+void FsmLuminosityDoCalc(FsmLuminosity *fsm)
+{
+	if (LuminositySensorIsReady(&luminosity_sensor)) {
+		fsm->lum = luminosity_sensor.value[0];
+		fsm->lum = KalmanFilterUpdate(&fsm->luminosity_filter, fsm->lum);
+		fsm->br = calc_brightness_linear(fsm->lum, BR_MIN, BR_MAX);
+		SetBrightness(fsm->br);
+
+		LuminositySensorBegin(&luminosity_sensor);
+	}
+}
+
+/*
+ * FSM data
+ */
+typedef struct {
+    Rtc_Timestamp ts;                   /* Current timestamp */
+    Rtc_Timestamp sun_rise1, sun_set1;  /* Twilight */
+    Rtc_Timestamp sun_rise2, sun_set2;  /* Actual */
+
+    /* Observation point */
+    uint8_t tz_idx;     /* In TIMEZONES table */
+    double tz;          /* Actual value */
+
+    double latitude_deg, latitude_rad;
+    double longitude_deg, longitude_rad;
+
+    /* Rise & set calculator */
+    snm_Calculator calc;
+
+    /* Update flags */
+    int update_time;
+    int update_aging;
+    int update_latitude;
+    int update_longitude;
+    int update_timezone;
+    int update_celestial;
+
+    /* Hardware */
+    BTN_STATES btn1_state_curr, btn1_state_prev;
+    BTN_STATES btn2_state_curr, btn2_state_prev;
+    BTN_STATES btn3_state_curr, btn3_state_prev;
+    BTN_STATES btn4_state_curr, btn4_state_prev;
+    BTN_STATES btn5_state_curr, btn5_state_prev;
+    BTN_STATES btn6_state_curr, btn6_state_prev;
+    BTN_STATES btn7_state_curr, btn7_state_prev;
+    BTN_STATES btn8_state_curr, btn8_state_prev;
+
+} FsmData;
+
+/* private */
+void FsmDataValidateTs(FsmData *fsm)
+{
+    if (fsm->ts.mday == 0 || fsm->ts.mon == 0 || fsm->ts.year < 2015) {
+        /* ... */
+        fsm->ts.mday = 1;
+        fsm->ts.mon = 1;
+        fsm->ts.year = 2015;
+
+        fsm->ts.hour = 0;
+        fsm->ts.min = 0;
+        fsm->ts.sec = 0;
+        Rtc_DS3231_set(fsm->ts);
+    }
+}
+
+/* public */
+void FsmDataCreate(FsmData *fsm)
+{
+    memset(&fsm->ts, 0, sizeof(fsm->ts));
+    memset(&fsm->sun_rise1, 0, sizeof(fsm->sun_rise1));
+    memset(&fsm->sun_set1, 0, sizeof(fsm->sun_set1));
+    memset(&fsm->sun_rise2, 0, sizeof(fsm->sun_rise2));
+    memset(&fsm->sun_set2, 0, sizeof(fsm->sun_set2));
+
+    fsm->update_time = 0;
+    fsm->update_aging = 0;
+    fsm->update_latitude = 0;
+    fsm->update_longitude = 0;
+    fsm->update_timezone = 0;
+    fsm->update_celestial = 0;
+
+    {
+        /* Current timestamp */
+        Wire_SetI2C(&hi2c1);
+        Rtc_DS3231_init(DS3231_INTCN);
+        Rtc_DS3231_get(&fsm->ts);
+        FsmDataValidateTs(fsm);
+    }
+
+    {
+        /* Observation point */
+        fsm->tz_idx = MSK_ZONE;
+        fsm->tz = TIMEZONES[fsm->tz_idx];
+
+        fsm->latitude_deg = DEFAULT_LATITUDE;
+        fsm->longitude_deg = DEFAULT_LONGITUDE;
+
+        fsm->latitude_rad = fsm->latitude_deg * snm_DEG_TO_RAD;
+        fsm->longitude_rad = fsm->longitude_deg * snm_DEG_TO_RAD;
+    }
+    
+    {
+        /* Sun & moon calculator */
+        snm_CalculatorCreate(&fsm->calc);
+        snm_CalculatorSetPoint(&fsm->calc, 
+                               fsm->latitude_deg, 
+                               fsm->longitude_rad);
+    }
+
+    {
+        fsm->btn1_state_prev = fsm->btn1_state_curr = BTN1_STATE();
+        fsm->btn2_state_prev = fsm->btn2_state_curr = BTN2_STATE();
+        fsm->btn3_state_prev = fsm->btn3_state_curr = BTN3_STATE();
+        fsm->btn4_state_prev = fsm->btn4_state_curr = BTN4_STATE();
+        fsm->btn5_state_prev = fsm->btn5_state_curr = BTN5_STATE();
+        fsm->btn6_state_prev = fsm->btn6_state_curr = BTN6_STATE();
+        fsm->btn7_state_prev = fsm->btn7_state_curr = BTN7_STATE();
+        fsm->btn8_state_prev = fsm->btn8_state_curr = BTN8_STATE();
+    }
+}
+
+void FsmDataCalcCelestial(FsmData *fsm)
+{
+    if (fsm->sun_rise1.mday != fsm->ts.mday || fsm->update_celestial) {
+        struct tm rise, set;
+
+        snm_CalculatorSetTime(&fsm->calc, 
+                fsm->ts.mday, fsm->ts.mon, fsm->ts.year);
+        snm_CalculatorSetDate(&fsm->calc, 
+                fsm->ts.hour, fsm->ts.min, fsm->ts.sec);
+        snm_CalculatorSetPoint(&fsm->calc, 
+                fsm->latitude_rad, fsm->longitude_rad);
+
+        snm_CalculatorSetTwilight(&fsm->calc, HORIZON_34arcmin);
+        snm_CalculatorCalc(&fsm->calc);
+        rise = snm_CalculatorGetDateAsTm(fsm->calc.sun_rise, fsm->tz);
+        set = snm_CalculatorGetDateAsTm(fsm->calc.sun_set, fsm->tz);
+
+        fsm->sun_rise1 = GetTimestampFromTm(rise);
+        fsm->sun_set1 = GetTimestampFromTm(set);
+
+        snm_CalculatorSetTwilight(&fsm->calc, TWILIGHT_CIVIL);
+        snm_CalculatorCalc(&fsm->calc);
+        rise = snm_CalculatorGetDateAsTm(fsm->calc.sun_rise, fsm->tz);
+        set = snm_CalculatorGetDateAsTm(fsm->calc.sun_set, fsm->tz);
+
+        fsm->sun_rise2 = GetTimestampFromTm(rise);
+        fsm->sun_set2 = GetTimestampFromTm(set);
+        fsm->update_celestial = 0;
+    }
+}
+
+void FsmDataSetBacklight(FsmData *fsm)
+{
+    if ((fsm->ts.hour == 0 && fsm->ts.min == 0 && fsm->ts.sec == 0)
+            || (fsm->ts.hour == fsm->sun_rise2.hour && 
+                fsm->ts.min < fsm->sun_rise2.min)) 
+    {
+        SetBacklight(255, 0, 0); // ночь
+    } else if ((fsm->ts.hour > fsm->sun_set2.hour)
+            || (fsm->ts.hour == fsm->sun_set2.hour && 
+                fsm->ts.min > fsm->sun_set2.min)) 
+    {
+        SetBacklight(255, 0, 0); // ночь
+    } else {
+        if ((fsm->ts.hour < fsm->sun_rise1.hour)
+                || (fsm->ts.hour == fsm->sun_rise1.hour && 
+                    fsm->ts.min < fsm->sun_rise1.min)) 
+        {
+            SetBacklight(255, 127, 0); // сумерки
+        } else if ((fsm->ts.hour > fsm->sun_set1.hour)
+                || (fsm->ts.hour == fsm->sun_set1.hour && 
+                    fsm->ts.min > fsm->sun_set1.min)) 
+        {
+            SetBacklight(255, 127, 0); // сумерки
+        } else {
+            SetBacklight(255, 255, 255); // день
+        }
+    }
+}
+
+void FsmDataButtonsUpdateState(FsmData *fsm)
+{
+    fsm->btn1_state_curr = BTN1_STATE();
+    fsm->btn2_state_curr = BTN2_STATE();
+    fsm->btn3_state_curr = BTN3_STATE();
+    fsm->btn4_state_curr = BTN4_STATE();
+    fsm->btn5_state_curr = BTN5_STATE();
+    fsm->btn6_state_curr = BTN6_STATE();
+    fsm->btn7_state_curr = BTN7_STATE();
+    fsm->btn8_state_curr = BTN8_STATE();
+}
 
 /* USER CODE END FunctionPrototypes */
 
@@ -708,7 +941,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 512);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1024);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -733,834 +966,811 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN StartDefaultTask */
-	HAL_Delay(10);
+    {
+        /* Hardware setup */
+        HAL_Delay(10);
+        ws2812_init();
+        SetBrightnessOn();
+        SetBrightness(200u);
+        Beep();
+    }
 
-	ws2812_init();
+    FsmData fsm;
+    FsmLuminosity fsm_lum;
+    Display display;
+    size_t n_places = 6;
+    
+    FsmDataCreate(&fsm);
+    FsmLuminosityCreate(&fsm_lum);
 
-	Beep();
-//	SetBacklight(255, 255, 255);
+    DisplayCreate(&display,
+                  n_places,
+                  &hspi1,
+                  LED_DATA_LATCH_GPIO_Port,
+                  LED_DATA_LATCH_Pin);
 
-	HAL_TIM_Base_Start(&htim5);
-	HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+    DISPLAY_MODES display_mode_curr = DISPLAY_MODE_A1_1;
+    DISPLAY_MODES display_mode_prev = display_mode_curr;
 
+    const uint32_t cycle_delay = 10u;
+    const uint32_t btn_repeat_delay = 1000u;
+    const uint32_t btn_fast_repeat_delay = 850u;
 
-	Wire_SetI2C(&hi2c1);
-	Rtc_DS3231_init(DS3231_INTCN);
+    uint32_t btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
 
-	Timestamp ts;
-	Rtc_DS3231_get(&ts);
+    int8_t aging = Rtc_DS3231_get_aging();
 
-	Timestamp sun_rise1 = {0}, sun_set1 = {0};
-	Timestamp sun_rise2 = {0}, sun_set2 = {0};
-
-	double latitude_deg = DEFAULT_LATITUDE;
-	double longitude_deg = DEFAULT_LONGITUDE;
-	uint8_t tz_idx = MSK_ZONE;
-
-	double tz = TIMEZONES[tz_idx];
-	double latitude = latitude_deg * snm_DEG_TO_RAD;
-	double longitude = longitude_deg * snm_DEG_TO_RAD;
-
-	snm_Calculator calc;
-
-	snm_CalculatorCreate(&calc);
-	snm_CalculatorSetPoint(&calc, latitude, longitude);
-
-	if (ts.mday == 0 || ts.mon == 0 || ts.year < 2015) {
-		/* ... */
-		ts.mday = 1;
-		ts.mon = 1;
-		ts.year = 2015;
-
-		ts.hour = 0;
-		ts.min = 0;
-		ts.sec = 0;
-		Rtc_DS3231_set(ts);
-	}
-
-	/* Yep, these params are magic! */
-	KalmanFilterInit(&luminosity_filter,
-					 4000.0f,
-					 4000.0f,
-					 0.125f);
-
-	Display display;
-	size_t n_places = 6;
-
-	DisplayCreate(&display,
-				  n_places,
-				  &hspi1,
-				  LED_DATA_LATCH_GPIO_Port,
-				  LED_DATA_LATCH_Pin);
-
-	LuminositySensorCreate(&luminosity_sensor);
-	LuminositySensorBegin(&luminosity_sensor);
-	HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
-
-	DISPLAY_MODES display_mode_curr = DISPLAY_MODE_A1_1;
-	DISPLAY_MODES display_mode_prev = display_mode_curr;
-
-	const uint32_t cycle_delay = 10u;
-	const uint32_t btn_repeat_delay = 1000u;
-	const uint32_t btn_fast_repeat_delay = 850u;
-
-	uint32_t btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
-
-	int update_time = 0;
-	int update_aging = 0;
-	int update_latitude = 0;
-	int update_longitude = 0;
-	int update_timezone = 0;
-	int update_celestial = 0;
-
-	int8_t aging = Rtc_DS3231_get_aging();
-	uint8_t brightness = 200u;
-
-	uint32_t btn6_pressed_counter = 0;
-	uint32_t btn7_pressed_counter = 0;
-	uint32_t btn8_pressed_counter = 0;
-
-	BTN_STATES btn1_state_curr = BTN1_STATE();
-	BTN_STATES btn2_state_curr = BTN2_STATE();
-	BTN_STATES btn3_state_curr = BTN3_STATE();
-	BTN_STATES btn4_state_curr = BTN4_STATE();
-	BTN_STATES btn5_state_curr = BTN5_STATE();
-	BTN_STATES btn6_state_curr = BTN6_STATE();
-	BTN_STATES btn7_state_curr = BTN7_STATE();
-	BTN_STATES btn8_state_curr = BTN8_STATE();
-
-	BTN_STATES btn1_state_prev = btn1_state_curr;
-	BTN_STATES btn2_state_prev = btn2_state_curr;
-	BTN_STATES btn3_state_prev = btn3_state_curr;
-	BTN_STATES btn4_state_prev = btn4_state_curr;
-	BTN_STATES btn5_state_prev = btn5_state_curr;
-	BTN_STATES btn6_state_prev = btn6_state_curr;
-	BTN_STATES btn7_state_prev = btn7_state_curr;
-	BTN_STATES btn8_state_prev = btn8_state_curr;
-
-	SetBrightness(brightness);
-
-	float lum;
-	float br = 0;
+    uint32_t btn6_pressed_counter = 0;
+    uint32_t btn7_pressed_counter = 0;
+    uint32_t btn8_pressed_counter = 0;
 
   /* Infinite loop */
-	while (1) {
+    while (1) {
+        FsmLuminosityDoCalc(&fsm_lum);
 
-		if (LuminositySensorIsReady(&luminosity_sensor)) {
-			lum = luminosity_sensor.value[0];
-			lum = KalmanFilterUpdate(&luminosity_filter, lum);
-			br = calc_brightness_linear(lum, BR_MIN, BR_MAX);
-			SetBrightness(br);
+        FsmDataCalcCelestial(&fsm);
+        FsmDataSetBacklight(&fsm);
+        FsmDataButtonsUpdateState(&fsm);
 
-			LuminositySensorBegin(&luminosity_sensor);
-			HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
-		}
+        switch (display_mode_curr) {
+        case DISPLAY_MODE_A1_1:
+            Rtc_DS3231_get(&fsm.ts);
+            Display_A1_1(&display, &fsm.ts);
 
-//		if (ts.hour >= 22) {
-//			v_curr = (ts.min + 1) * 4;
-//			if (v_prev != v_curr) {
-//				SetBacklight((240-v_curr) % v_lim, v_curr % v_lim, 0);
-//				v_prev = v_curr;
-//			}
-//		} else if (ts.hour <= 6) {
-//			SetBacklight(0, 0, 255);
-//		} else if (ts.hour <= 18) {
-//			SetBacklight(255, 255, 255);
-//		} else {
-//			SetBacklight(100, 100, 100);
-//		}
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+                    display_mode_prev = display_mode_curr;
+                    display_mode_curr = DISPLAY_MODE_EDIT_TIME_1;
+                    Beep();
+                } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
 
-		btn1_state_curr = BTN1_STATE();
-		btn2_state_curr = BTN2_STATE();
-		btn3_state_curr = BTN3_STATE();
-		btn4_state_curr = BTN4_STATE();
-		btn5_state_curr = BTN5_STATE();
-		btn6_state_curr = BTN6_STATE();
-		btn7_state_curr = BTN7_STATE();
-		btn8_state_curr = BTN8_STATE();
+                    if (fsm.btn2_state_curr == BTN_DOWN) {
+                        display_mode_prev = display_mode_curr;
+                        display_mode_curr = DISPLAY_MODE_A1_2;
+                        Beep();
+                    }
+                } else if (fsm.btn8_state_prev != fsm.btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+                    btn8_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn8_state_prev = fsm.btn8_state_curr;
 
-		if (sun_rise1.mday != ts.mday || update_celestial) {
-			struct tm rise, set;
+                    if (fsm.btn8_state_curr == BTN_DOWN) {
+                    }
+                } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                    btn7_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn7_state_prev = fsm.btn7_state_curr;
 
-			snm_CalculatorSetTime(&calc, ts.mday, ts.mon, ts.year);
-			snm_CalculatorSetDate(&calc, ts.hour, ts.min, ts.sec);
-			snm_CalculatorSetPoint(&calc, latitude, longitude);
+                    if (fsm.btn7_state_curr == BTN_DOWN) {
+                    }
+                } else if (fsm.btn3_state_prev != fsm.btn3_state_curr) {
+                    fsm.btn3_state_prev = fsm.btn3_state_curr;
 
-			snm_CalculatorSetTwilight(&calc, HORIZON_34arcmin);
-			snm_CalculatorCalc(&calc);
-			rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
-			set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+                    if (fsm.btn3_state_curr == BTN_DOWN) {
+                        display_mode_prev = display_mode_curr;
+                        display_mode_curr = DISPLAY_MODE_S1_1;
+                        Beep();
+                    }
+                } else if (fsm.btn4_state_prev != fsm.btn4_state_curr) {
+                    if (fsm.btn4_state_curr == BTN_DOWN) {
+                        display_mode_prev = display_mode_curr;
+                        display_mode_curr = DISPLAY_MODE_P1_1;
+                        Beep();
+                    }
+                }
+            }
+            break;
 
-			sun_rise1 = GetTimestampFromTm(rise);
-			sun_set1 = GetTimestampFromTm(set);
+        case DISPLAY_MODE_A1_2:
+            Rtc_DS3231_get(&fsm.ts);
+            Display_A1_2(&display, &fsm.ts);
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+                    display_mode_prev = display_mode_curr;
+                    display_mode_curr = DISPLAY_MODE_EDIT_TIME_2;
+                    Beep();
+                } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
 
-			snm_CalculatorSetTwilight(&calc, TWILIGHT_CIVIL);
-			snm_CalculatorCalc(&calc);
-			rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
-			set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+                    if (fsm.btn2_state_curr == BTN_DOWN) {
+                        display_mode_prev = display_mode_curr;
+                        display_mode_curr = DISPLAY_MODE_A1_3;
+                        Beep();
+                    }
+                }
+            }
+            break;
 
-			sun_rise2 = GetTimestampFromTm(rise);
-			sun_set2 = GetTimestampFromTm(set);
-			update_celestial = 0;
-		}
+        case DISPLAY_MODE_A1_3:
+            Rtc_DS3231_get(&fsm.ts);
+            Display_A1_3(&display, &fsm.ts);
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+                    display_mode_prev = display_mode_curr;
+                    display_mode_curr = DISPLAY_MODE_EDIT_DATE;
+                    Beep();
+                } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
 
-		{
-			if ((ts.hour == 0 && ts.min == 0 && ts.sec == 0)
-					|| (ts.hour == sun_rise2.hour && ts.min < sun_rise2.min)) {
-				SetBacklight(255, 0, 0); // ночь
-			} else if ((ts.hour > sun_set2.hour)
-					|| (ts.hour == sun_set2.hour && ts.min > sun_set2.min)) {
-				SetBacklight(255, 0, 0); // ночь
-			} else
-			{
-				if ((ts.hour < sun_rise1.hour)
-						|| (ts.hour == sun_rise1.hour && ts.min < sun_rise1.min)) {
-					SetBacklight(255, 127, 0); // сумерки
-				} else if ((ts.hour > sun_set1.hour)
-						|| (ts.hour == sun_set1.hour && ts.min > sun_set1.min)) {
-					SetBacklight(255, 127, 0); // сумерки
-				} else {
-					SetBacklight(255, 255, 255); // день
-				}
-			}
-//			SetBacklight(255, 0, 0);
-//			SetBacklight(255, 255, 255);
-//			SetBacklight(255, 127, 0);
-//			SetBacklight(0, 0, 255);
-		}
+                    if (fsm.btn2_state_curr == BTN_DOWN) {
+                        display_mode_prev = display_mode_curr;
+                        display_mode_curr = DISPLAY_MODE_A1_1;
+                        Beep();
+                    }
+                }
+            }
+            break;
 
-		switch (display_mode_curr) {
-		case DISPLAY_MODE_A1_1:
-			Rtc_DS3231_get(&ts);
-			Display_A1_1(&display, &ts);
+        case DISPLAY_MODE_S1_1:
+            {
+                static uint32_t counter;
+                static uint8_t flip_flop;
+                uint32_t counter_curr;
 
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_TIME_1;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
+                if (counter == 0) {
+                    counter = HAL_GetTick();
+                }
 
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_2;
-						Beep();
-					}
-				} /*else if (btn8_state_curr == BTN_DOWN) {
-					btn8_state_prev = btn8_state_curr;
+                counter_curr = HAL_GetTick();
 
-					int day = 9, month = 10, year = 2018;
-					int hour = 9, minute = 0, second = 0;
+                if (counter_curr - counter > 1000u) {
+                    flip_flop = 1;
+                    counter = 0;
+                }
 
-					double latitude = 55.75 * snm_DEG_TO_RAD;
-					double longitude = 37.50 * snm_DEG_TO_RAD;
-					double tz = +3.0;
+                if (flip_flop == 0) {
+                    Display_S1_1_Msg(&display);
+                } else {
+                    Display_S1_1(&display, &fsm.sun_rise1);
+                }
 
-					snm_Calculator calc;
-					struct tm sun_rise, moon_rise;
-					struct tm sun_set, moon_set;
+                if (fsm.btn3_state_prev != fsm.btn3_state_curr) {
+                    if (fsm.btn3_state_curr == BTN_DOWN) {
+                        counter = 0;
+                        flip_flop = 0;
+                        display_mode_curr = DISPLAY_MODE_S1_2;
+                    }
 
-					snm_CalculatorCreate(&calc);
-					snm_CalculatorSetTime(&calc, day, month, year);
-					snm_CalculatorSetDate(&calc, hour, minute, second);
-					snm_CalculatorSetPoint(&calc, latitude, longitude);
-					snm_CalculatorSetTwilight(&calc, HORIZON_34arcmin);
-//					Beep();
-					snm_CalculatorCalc(&calc);
-//					Beep();
+                    fsm.btn3_state_prev = fsm.btn3_state_curr;
+                }
 
-					sun_rise = snm_CalculatorGetDateAsTm(calc.sun_rise, tz);
-					sun_set = snm_CalculatorGetDateAsTm(calc.sun_set, tz);
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr
+                    || fsm.btn2_state_prev != fsm.btn2_state_curr
+                    || fsm.btn4_state_prev != fsm.btn4_state_curr
+                    || fsm.btn5_state_prev != fsm.btn5_state_curr
+                    || fsm.btn6_state_prev != fsm.btn6_state_curr
+                    || fsm.btn7_state_prev != fsm.btn7_state_curr
+                    || fsm.btn8_state_prev != fsm.btn8_state_curr)
+                {
+                    counter = 0;
+                    flip_flop = 0;
+                    display_mode_curr = display_mode_prev;
+//                  fsm.btn1_state_prev = fsm.btn1_state_curr;
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
+//                  fsm.btn4_state_prev = fsm.btn4_state_curr;
+//                  fsm.btn5_state_prev = fsm.btn5_state_curr;
+//                  fsm.btn6_state_prev = fsm.btn6_state_curr;
+//                  fsm.btn7_state_prev = fsm.btn7_state_curr;
+//                  fsm.btn8_state_prev = fsm.btn8_state_curr;
+                }
+            }
+            break;
 
-					moon_rise = snm_CalculatorGetDateAsTm(calc.moon_rise, tz);
-					moon_set = snm_CalculatorGetDateAsTm(calc.moon_set, tz);
+        case DISPLAY_MODE_S1_2:
+            {
+                static uint32_t counter;
+                static uint8_t flip_flop;
+                uint32_t counter_curr;
 
-					Timestamp sun_rise2, sun_set2;
-					Timestamp moon_rise2, moon_set2;
+                if (counter == 0) {
+                    counter = HAL_GetTick();
+                }
 
-					sun_rise2.hour = sun_rise.tm_hour;
-					sun_rise2.min = sun_rise.tm_min;
-					sun_rise2.sec = sun_rise.tm_sec;
+                counter_curr = HAL_GetTick();
 
-					sun_rise2.mday = sun_rise.tm_mday;
-					sun_rise2.mon = sun_rise.tm_mon + 1;
-					sun_rise2.year = sun_rise.tm_year;
+                if (counter_curr - counter > 1000u) {
+                    flip_flop = 1;
+                    counter = 0;
+                }
 
-					Display_S1_1(&display, &sun_rise2);
-				}*/ else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-					btn8_pressed_counter = btn_fast_repeat_delay;
-					btn8_state_prev = btn8_state_curr;
+                if (flip_flop == 0) {
+                    Display_S2_1_Msg(&display);
+                } else {
+                    Display_S1_1(&display, &fsm.sun_set1);
+                }
 
-					if (btn8_state_curr == BTN_DOWN) {
-					}
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-					btn7_pressed_counter = btn_fast_repeat_delay;
-					btn7_state_prev = btn7_state_curr;
+                if (fsm.btn3_state_prev != fsm.btn3_state_curr) {
+                    if (fsm.btn3_state_curr == BTN_DOWN) {
+                        counter = 0;
+                        flip_flop = 0;
+                        display_mode_curr = DISPLAY_MODE_S1_1;
+                    }
 
-					if (btn7_state_curr == BTN_DOWN) {
-					}
-				} else if (btn3_state_prev != btn3_state_curr) {
-					btn3_state_prev = btn3_state_curr;
+                    fsm.btn3_state_prev = fsm.btn3_state_curr;
+                }
 
-					if (btn3_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_S1_1;
-						Beep();
-					}
-				}
-			}
-			break;
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr
+                    || fsm.btn2_state_prev != fsm.btn2_state_curr
+                    || fsm.btn4_state_prev != fsm.btn4_state_curr
+                    || fsm.btn5_state_prev != fsm.btn5_state_curr
+                    || fsm.btn6_state_prev != fsm.btn6_state_curr
+                    || fsm.btn7_state_prev != fsm.btn7_state_curr
+                    || fsm.btn8_state_prev != fsm.btn8_state_curr)
+                {
+                    counter = 0;
+                    flip_flop = 0;
+                    display_mode_curr = display_mode_prev;
+//                  fsm.btn1_state_prev = fsm.btn1_state_curr;
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
+//                  fsm.btn4_state_prev = fsm.btn4_state_curr;
+//                  fsm.btn5_state_prev = fsm.btn5_state_curr;
+//                  fsm.btn6_state_prev = fsm.btn6_state_curr;
+//                  fsm.btn7_state_prev = fsm.btn7_state_curr;
+//                  fsm.btn8_state_prev = fsm.btn8_state_curr;
+                }
+            }
+            break;
 
-		case DISPLAY_MODE_A1_2:
-			Rtc_DS3231_get(&ts);
-			Display_A1_2(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_TIME_2;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
+        case DISPLAY_MODE_P1_1:
+        {
+            uint16_t pressure = 1;
+//          HAL_StatusTypeDef bmp_ok;
 
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_3;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_3:
-			Rtc_DS3231_get(&ts);
-			Display_A1_3(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-					display_mode_prev = display_mode_curr;
-					display_mode_curr = DISPLAY_MODE_EDIT_DATE;
-					Beep();
-				} else if (btn2_state_prev != btn2_state_curr) {
-					btn2_state_prev = btn2_state_curr;
-
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_prev = display_mode_curr;
-						display_mode_curr = DISPLAY_MODE_A1_1;
-						Beep();
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_A1_4:
-//			Rtc_DS3231_get(&ts);
-//			Display_A1_4(&display, &ts);
-//			{
-//				if (btn2_state_prev != btn2_state_curr) {
-//					btn2_state_prev = btn2_state_curr;
+//          uint8_t buf[20];
 //
-//					if (btn2_state_curr == BTN_DOWN) {
-//						display_mode_prev = display_mode_curr;
-//						display_mode_curr = DISPLAY_MODE_A1_5;
-//						Beep();
-//					}
-//				}
-//			}
-			break;
-
-		case DISPLAY_MODE_A1_5:
-//			Rtc_DS3231_get(&ts);
-//			Display_A1_5(&display, &ts);
-//			{
-//				if (btn2_state_prev != btn2_state_curr) {
-//					btn2_state_prev = btn2_state_curr;
+//          HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET);
 //
-//					if (btn2_state_curr == BTN_DOWN) {
-//						display_mode_prev = display_mode_curr;
-//						display_mode_curr = DISPLAY_MODE_A1_1;
-//						Beep();
-//					}
-//				}
-//			}
-			break;
-
-		case DISPLAY_MODE_S1_1:
-			{
-				static uint32_t counter;
-				static uint8_t flip_flop;
-				uint32_t counter_curr;
-
-				if (counter == 0) {
-					counter = HAL_GetTick();
-				}
-
-				counter_curr = HAL_GetTick();
-
-				if (counter_curr - counter > 1000u) {
-					flip_flop = 1;
-					counter = 0;
-				}
-
-				if (flip_flop == 0) {
-					Display_S1_1_Msg(&display);
-				} else {
-					Display_S1_1(&display, &sun_rise1);
-				}
-
-				if (btn3_state_prev != btn3_state_curr) {
-					if (btn3_state_curr == BTN_DOWN) {
-						counter = 0;
-						flip_flop = 0;
-						display_mode_curr = DISPLAY_MODE_S1_2;
-					}
-
-					btn3_state_prev = btn3_state_curr;
-				}
-
-				if (btn1_state_prev != btn1_state_curr
-					|| btn2_state_prev != btn2_state_curr
-					|| btn4_state_prev != btn4_state_curr
-					|| btn5_state_prev != btn5_state_curr
-					|| btn6_state_prev != btn6_state_curr
-					|| btn7_state_prev != btn7_state_curr
-					|| btn8_state_prev != btn8_state_curr)
-				{
-					counter = 0;
-					flip_flop = 0;
-					display_mode_curr = display_mode_prev;
-//					btn1_state_prev = btn1_state_curr;
-					btn2_state_prev = btn2_state_curr;
-//					btn4_state_prev = btn4_state_curr;
-//					btn5_state_prev = btn5_state_curr;
-//					btn6_state_prev = btn6_state_curr;
-//					btn7_state_prev = btn7_state_curr;
-//					btn8_state_prev = btn8_state_curr;
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_S1_2:
-			{
-				static uint32_t counter;
-				static uint8_t flip_flop;
-				uint32_t counter_curr;
-
-				if (counter == 0) {
-					counter = HAL_GetTick();
-				}
-
-				counter_curr = HAL_GetTick();
-
-				if (counter_curr - counter > 1000u) {
-					flip_flop = 1;
-					counter = 0;
-				}
-
-				if (flip_flop == 0) {
-					Display_S2_1_Msg(&display);
-				} else {
-					Display_S1_1(&display, &sun_set1);
-				}
-
-				if (btn3_state_prev != btn3_state_curr) {
-					if (btn3_state_curr == BTN_DOWN) {
-						counter = 0;
-						flip_flop = 0;
-						display_mode_curr = DISPLAY_MODE_S1_1;
-					}
-
-					btn3_state_prev = btn3_state_curr;
-				}
-
-				if (btn1_state_prev != btn1_state_curr
-					|| btn2_state_prev != btn2_state_curr
-					|| btn4_state_prev != btn4_state_curr
-					|| btn5_state_prev != btn5_state_curr
-					|| btn6_state_prev != btn6_state_curr
-					|| btn7_state_prev != btn7_state_curr
-					|| btn8_state_prev != btn8_state_curr)
-				{
-					counter = 0;
-					flip_flop = 0;
-					display_mode_curr = display_mode_prev;
-//					btn1_state_prev = btn1_state_curr;
-					btn2_state_prev = btn2_state_curr;
-//					btn4_state_prev = btn4_state_curr;
-//					btn5_state_prev = btn5_state_curr;
-//					btn6_state_prev = btn6_state_curr;
-//					btn7_state_prev = btn7_state_curr;
-//					btn8_state_prev = btn8_state_curr;
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_TIME_1:
-			Display_EditTime1(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-							update_celestial = 1;
-						}
-
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-					if (btn8_state_curr == BTN_DOWN) {
-						ts.sec += 1;
-						ts.sec %= 60;
-						update_time = 1;
-					}
-
-					btn8_pressed_counter = btn_fast_repeat_delay;
-					btn8_state_prev = btn8_state_curr;
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-					if (btn7_state_curr == BTN_DOWN) {
-						ts.min += 1;
-						ts.min %= 60;
-						update_time = 1;
-					}
-
-					btn7_pressed_counter = btn_fast_repeat_delay;
-					btn7_state_prev = btn7_state_curr;
-				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-					if (btn6_state_curr == BTN_DOWN) {
-						ts.hour += 1;
-						ts.hour %= 24;
-						update_time = 1;
-					}
-
-					btn6_pressed_counter = btn_fast_repeat_delay;
-					btn6_state_prev = btn6_state_curr;
-				} else if (btn2_state_prev != btn2_state_curr) {
-					if (btn2_state_curr == BTN_DOWN) {
-						display_mode_curr = DISPLAY_MODE_EDIT_AGING;
-					}
-
-					btn2_state_prev = btn2_state_curr;
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_TIME_2:
-			Display_EditTime2(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-							update_celestial = 1;
-						}
-
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-					if (btn7_state_curr == BTN_DOWN) {
-						ts.sec = 0;
-						ts.min += 1;
-						ts.min %= 60;
-						update_time = 1;
-					}
-
-					btn7_pressed_counter = btn_fast_repeat_delay;
-					btn7_state_prev = btn7_state_curr;
-				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-					if (btn6_state_curr == BTN_DOWN) {
-						ts.sec = 0;
-						ts.hour += 1;
-						ts.hour %= 23;
-						update_time = 1;
-					}
-
-					btn6_pressed_counter = btn_fast_repeat_delay;
-					btn6_state_prev = btn6_state_curr;
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_AGING:
-			{
-				Display_EditAging(&display, aging);
-
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_aging) {
-							Rtc_DS3231_set_aging(aging);
-							update_aging = 0;
-						}
-					}
-
-					display_mode_curr = display_mode_prev;
-				} else {
-					if (btn8_state_prev != btn8_state_curr) {
-						if (btn8_state_curr == BTN_DOWN) {
-							--aging;
-							update_aging = 1;
-						}
-
-						btn8_state_prev = btn8_state_curr;
-					} else if (btn7_state_prev != btn7_state_curr) {
-						if (btn7_state_curr == BTN_DOWN) {
-							++aging;
-							update_aging = 1;
-						}
-
-						btn7_state_prev = btn7_state_curr;
-					} else if (btn2_state_prev != btn2_state_curr) {
-						if (btn2_state_curr == BTN_DOWN) {
-							display_mode_curr = DISPLAY_MODE_EDIT_LATITUDE;
-						}
-
-						btn2_state_prev = btn2_state_curr;
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_LATITUDE:
-			{
-				Display_EditLatitude(&display, latitude_deg);
-
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_latitude) {
-							/* TODO: save latitude to flash */
-							update_latitude = 0;
-							update_celestial = 1;
-						}
-					}
-
-					display_mode_curr = display_mode_prev;
-				} else {
-					if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-						if (btn8_state_curr == BTN_DOWN) {
-							if (latitude_deg > -90.00)
-								latitude_deg -= 0.01;
-
-							latitude = latitude_deg * snm_DEG_TO_RAD;
-							update_latitude = 1;
-						} else {
-							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
-						}
-
-						btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
-						btn_fast_repeat_delay_accelerated += 10;
-						btn8_state_prev = btn8_state_curr;
-					} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-						if (btn7_state_curr == BTN_DOWN) {
-							if (latitude_deg < +90.00)
-								latitude_deg += 0.01;
-
-							latitude = latitude_deg * snm_DEG_TO_RAD;
-							update_latitude = 1;
-						} else {
-							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
-						}
-
-						btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
-						btn_fast_repeat_delay_accelerated += 10;
-						btn7_state_prev = btn7_state_curr;
-					} else if (btn2_state_prev != btn2_state_curr) {
-						if (btn2_state_curr == BTN_DOWN) {
-							display_mode_curr = DISPLAY_MODE_EDIT_LONGITUDE;
-						}
-
-						btn2_state_prev = btn2_state_curr;
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_LONGITUDE:
-			{
-				Display_EditLongitude(&display, longitude_deg);
-
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_longitude) {
-							/* TODO: save longitude to flash */
-							update_longitude = 0;
-							update_celestial = 1;
-						}
-					}
-
-					display_mode_curr = display_mode_prev;
-				} else {
-					if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-						if (btn8_state_curr == BTN_DOWN) {
-							if (longitude_deg > -180.00)
-								longitude_deg -= 0.01;
-
-							longitude = longitude_deg * snm_DEG_TO_RAD;
-							update_longitude = 1;
-						} else {
-							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
-						}
-
-						btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
-						btn_fast_repeat_delay_accelerated += 10;
-						btn8_state_prev = btn8_state_curr;
-					} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-						if (btn7_state_curr == BTN_DOWN) {
-							if (longitude_deg < +180.00)
-								longitude_deg += 0.01;
-
-							longitude = longitude_deg * snm_DEG_TO_RAD;
-							update_longitude = 1;
-						} else {
-							btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
-						}
-
-						btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
-						btn_fast_repeat_delay_accelerated += 10;
-						btn7_state_prev = btn7_state_curr;
-					} else if (btn2_state_prev != btn2_state_curr) {
-						if (btn2_state_curr == BTN_DOWN) {
-							display_mode_curr = DISPLAY_MODE_EDIT_TIMEZONE;
-						}
-
-						btn2_state_prev = btn2_state_curr;
-					}
-				}
-			}
-			break;
-
-		case DISPLAY_MODE_EDIT_TIMEZONE:
-			{
-				Display_EditTimezone(&display, tz);
-
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
-
-					if (btn1_state_curr == BTN_UP) {
-						if (update_timezone) {
-							/* TODO: save tz_idx to flash */
-//							HAL_StatusTypeDef flash_ok;
+//          buf[0] = 0xF4;
+//          HAL_SPI_Transmit(&hspi3, buf, 1, 100);
 //
-//							flash_ok = HAL_ERROR;
-//							while(flash_ok != HAL_OK) {
-//								flash_ok = HAL_FLASH_Unlock();
-//							}
+//          buf[0] = 0b00100111;
+//          HAL_SPI_Transmit(&hspi3, buf, 1, 100);
 //
-//							flash_ok = HAL_ERROR;
-//							while(flash_ok != HAL_OK) {
-//								flash_ok = HAL_FLASH_Program(TYPEPROGRAM_BYTE, 0x08100000, 0x7777);
-//							}
+//          buf[0] = 0xF8;
+//          HAL_SPI_Transmit(&hspi3, buf, 1, 100);
 //
-//							flash_ok = HAL_ERROR;
-//							while(flash_ok != HAL_OK) {
-//								flash_ok = HAL_FLASH_Lock();
-//							}
-							update_timezone = 0;
-							update_celestial = 1;
-						}
-					}
+//          HAL_SPI_Receive(&hspi3, buf, 1, 100);
+//          HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET);
+//
+//          pressure = (buf[1] << 8) & buf[0];//buf[4] << 8 | buf[5];
 
-					display_mode_curr = display_mode_prev;
-				} else {
-					if (btn8_state_prev != btn8_state_curr) {
-						if (btn8_state_curr == BTN_DOWN) {
-							tz_idx = (tz_idx-1) % N_TIMEZONES;
-							tz = TIMEZONES[tz_idx];
-							update_timezone = 1;
-						}
+            {
+#define         CS_SET()    HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET)
+#define         CS_RESET()  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET)
 
-						btn8_state_prev = btn8_state_curr;
-					} else if (btn7_state_prev != btn7_state_curr) {
-						if (btn7_state_curr == BTN_DOWN) {
-							tz_idx = (tz_idx+1) % N_TIMEZONES;
-							tz = TIMEZONES[tz_idx];
-							update_timezone = 1;
-						}
+#define         BMP280_REGISTER_DIG_T1 0x88
+#define         BMP280_REGISTER_DIG_T2 0x8A
+#define         BMP280_REGISTER_DIG_T3 0x8C
+#define         BMP280_REGISTER_DIG_P1 0x8E
+#define         BMP280_REGISTER_DIG_P2 0x90
+#define         BMP280_REGISTER_DIG_P3 0x92
+#define         BMP280_REGISTER_DIG_P4 0x94
+#define         BMP280_REGISTER_DIG_P5 0x96
+#define         BMP280_REGISTER_DIG_P6 0x98
+#define         BMP280_REGISTER_DIG_P7 0x9A
+#define         BMP280_REGISTER_DIG_P8 0x9C
+#define         BMP280_REGISTER_DIG_P9 0x9E
 
-						btn7_state_prev = btn7_state_curr;
-					} else if (btn2_state_prev != btn2_state_curr) {
-						if (btn2_state_curr == BTN_DOWN) {
-							display_mode_curr = DISPLAY_MODE_EDIT_AGING;
-						}
+                const uint32_t delay = 5000u;
+                uint8_t data[6];
+                uint8_t address[1];
 
-						btn2_state_prev = btn2_state_curr;
-					}
-				}
-			}
-			break;
+                CS_SET();
+                data[0] = 0xF4 & ~0x80;
+                data[1] = 0b00100111;
+                HAL_SPI_Transmit(&hspi3, data, 2, delay);
+                CS_RESET();
 
-		case DISPLAY_MODE_EDIT_DATE:
-			Display_EditDate(&display, &ts);
-			{
-				if (btn1_state_prev != btn1_state_curr) {
-					btn1_state_prev = btn1_state_curr;
+                // cooeff's
+                // T1
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_T1 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T1, 2, delay);
+                CS_RESET();
 
-					if (btn1_state_curr == BTN_UP) {
-						if (update_time) {
-							Rtc_DS3231_set(ts);
-							update_time = 0;
-						}
+                // T2
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_T2 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T2, 2, delay);
+                CS_RESET();
 
-						display_mode_curr = display_mode_prev;
-					}
-				} else if (btn8_state_prev != btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
-					if (btn8_state_curr == BTN_DOWN) {
-						if (ts.year < 2015)
-							ts.year = 2015;
+                // T3
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_T3 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T3, 2, delay);
+                CS_RESET();
 
-						ts.year -= 2000;
-						ts.year += 1;
-						ts.year %= 100;
-						ts.year += 2000;
-						update_time = 1;
-					}
+                // P1
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P1 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P1, 2, delay);
+                CS_RESET();
 
-					btn8_pressed_counter = btn_fast_repeat_delay;
-					btn8_state_prev = btn8_state_curr;
-				} else if (btn7_state_prev != btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
-					if (btn7_state_curr == BTN_DOWN) {
-						ts.mon += 1;
-						ts.mon %= 12;
-						update_time = 1;
-					}
+                // P2
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P2 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P2, 2, delay);
+                CS_RESET();
 
-					btn7_pressed_counter = btn_fast_repeat_delay;
-					btn7_state_prev = btn7_state_curr;
-				} else if (btn6_state_prev != btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
-					if (btn6_state_curr == BTN_DOWN) {
-						ts.mday = (ts.mday % 31) + 1;
-						update_time = 1;
-					}
+                // P3
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P3 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P3, 2, delay);
+                CS_RESET();
 
-					btn6_pressed_counter = btn_fast_repeat_delay;
-					btn6_state_prev = btn6_state_curr;
-				}
-			}
-			break;
-		}
+                // P4
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P4 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P4, 2, delay);
+                CS_RESET();
 
-		if (btn6_state_curr == BTN_DOWN)
-			btn6_pressed_counter += cycle_delay;
+                // P5
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P5 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P5, 2, delay);
+                CS_SET();
+                CS_RESET();
 
-		if (btn7_state_curr == BTN_DOWN)
-			btn7_pressed_counter += cycle_delay;
+                // P6
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P6 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P6, 2, delay);
+                CS_RESET();
 
-		if (btn8_state_curr == BTN_DOWN)
-			btn8_pressed_counter += cycle_delay;
+                // P7
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P7 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P7, 2, delay);
+                CS_RESET();
 
-		HAL_Delay(cycle_delay);
+                // P8
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P8 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P8, 2, delay);
+                CS_RESET();
+
+                // P9
+                CS_SET();
+                address[0] = BMP280_REGISTER_DIG_P9 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P9, 2, delay);
+                CS_RESET();
+
+
+                // adc values
+                CS_SET();
+                address[0] = 0xF7 | 0x80;
+                HAL_SPI_Transmit(&hspi3, address, 1, delay);
+                HAL_SPI_Receive(&hspi3, data, 6, delay);
+                CS_RESET();
+
+                uint8_t adc_P_msb = data[0];
+                uint8_t adc_P_lsb = data[1];
+                uint8_t adc_P_xlsb = data[2];
+
+                uint8_t adc_T_msb = data[3];
+                uint8_t adc_T_lsb = data[4];
+                uint8_t adc_T_xlsb = data[5];
+
+                BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
+                BMP280_S32_t adc_P = ((adc_P_msb << 16) | (adc_P_lsb << 8) | adc_P_xlsb) >> 4;
+
+                BMP280_S32_t p, t;
+
+                t = bmp280_compensate_T_int32(adc_T);
+                p = bmp280_compensate_P_int32(adc_P);
+
+                double tmp = p;
+                tmp *= 0.00750062;
+                tmp *= 10.0;
+
+                pressure = tmp;
+//                uint8_t a = *(volatile uint32_t *)0x60000000;
+//                pressure = a;
+
+                HAL_Delay(500u);
+            }
+
+            Display_P1(&display, pressure);
+
+            if (fsm.btn1_state_prev != fsm.btn1_state_curr
+                || fsm.btn2_state_prev != fsm.btn2_state_curr
+                || fsm.btn3_state_prev != fsm.btn3_state_curr
+//              || fsm.btn4_state_prev != fsm.btn4_state_curr
+                || fsm.btn5_state_prev != fsm.btn5_state_curr
+                || fsm.btn6_state_prev != fsm.btn6_state_curr
+                || fsm.btn7_state_prev != fsm.btn7_state_curr
+                || fsm.btn8_state_prev != fsm.btn8_state_curr)
+            {
+                display_mode_curr = display_mode_prev;
+                fsm.btn2_state_prev = fsm.btn2_state_curr;
+            }
+        }
+        break;
+
+        case DISPLAY_MODE_EDIT_TIME_1:
+            Display_EditTime1(&display, &fsm.ts);
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_time) {
+                            Rtc_DS3231_set(fsm.ts);
+                            fsm.update_time = 0;
+                            fsm.update_celestial = 1;
+                        }
+
+                        display_mode_curr = display_mode_prev;
+                    }
+                } else if (fsm.btn8_state_prev != fsm.btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn8_state_curr == BTN_DOWN) {
+                        fsm.ts.sec += 1;
+                        fsm.ts.sec %= 60;
+                        fsm.update_time = 1;
+                    }
+
+                    btn8_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn8_state_prev = fsm.btn8_state_curr;
+                } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn7_state_curr == BTN_DOWN) {
+                        fsm.ts.min += 1;
+                        fsm.ts.min %= 60;
+                        fsm.update_time = 1;
+                    }
+
+                    btn7_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn7_state_prev = fsm.btn7_state_curr;
+                } else if (fsm.btn6_state_prev != fsm.btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn6_state_curr == BTN_DOWN) {
+                        fsm.ts.hour += 1;
+                        fsm.ts.hour %= 24;
+                        fsm.update_time = 1;
+                    }
+
+                    btn6_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn6_state_prev = fsm.btn6_state_curr;
+                } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                    if (fsm.btn2_state_curr == BTN_DOWN) {
+                        display_mode_curr = DISPLAY_MODE_EDIT_AGING;
+                    }
+
+                    fsm.btn2_state_prev = fsm.btn2_state_curr;
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_TIME_2:
+            Display_EditTime2(&display, &fsm.ts);
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_time) {
+                            Rtc_DS3231_set(fsm.ts);
+                            fsm.update_time = 0;
+                            fsm.update_celestial = 1;
+                        }
+
+                        display_mode_curr = display_mode_prev;
+                    }
+                } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn7_state_curr == BTN_DOWN) {
+                        fsm.ts.sec = 0;
+                        fsm.ts.min += 1;
+                        fsm.ts.min %= 60;
+                        fsm.update_time = 1;
+                    }
+
+                    btn7_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn7_state_prev = fsm.btn7_state_curr;
+                } else if (fsm.btn6_state_prev != fsm.btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn6_state_curr == BTN_DOWN) {
+                        fsm.ts.sec = 0;
+                        fsm.ts.hour += 1;
+                        fsm.ts.hour %= 23;
+                        fsm.update_time = 1;
+                    }
+
+                    btn6_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn6_state_prev = fsm.btn6_state_curr;
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_AGING:
+            {
+                Display_EditAging(&display, aging);
+
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_aging) {
+                            Rtc_DS3231_set_aging(aging);
+                            fsm.update_aging = 0;
+                        }
+                    }
+
+                    display_mode_curr = display_mode_prev;
+                } else {
+                    if (fsm.btn8_state_prev != fsm.btn8_state_curr) {
+                        if (fsm.btn8_state_curr == BTN_DOWN) {
+                            --aging;
+                            fsm.update_aging = 1;
+                        }
+
+                        fsm.btn8_state_prev = fsm.btn8_state_curr;
+                    } else if (fsm.btn7_state_prev != fsm.btn7_state_curr) {
+                        if (fsm.btn7_state_curr == BTN_DOWN) {
+                            ++aging;
+                            fsm.update_aging = 1;
+                        }
+
+                        fsm.btn7_state_prev = fsm.btn7_state_curr;
+                    } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                        if (fsm.btn2_state_curr == BTN_DOWN) {
+                            display_mode_curr = DISPLAY_MODE_EDIT_LATITUDE;
+                        }
+
+                        fsm.btn2_state_prev = fsm.btn2_state_curr;
+                    }
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_LATITUDE:
+            {
+                Display_EditLatitude(&display, fsm.latitude_deg);
+
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_latitude) {
+                            /* TODO: save latitude to flash */
+                            fsm.update_latitude = 0;
+                            fsm.update_celestial = 1;
+                        }
+                    }
+
+                    display_mode_curr = display_mode_prev;
+                } else {
+                    if (fsm.btn8_state_prev != fsm.btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+                        if (fsm.btn8_state_curr == BTN_DOWN) {
+                            if (fsm.latitude_deg > -90.00)
+                                fsm.latitude_deg -= 0.01;
+
+                            fsm.latitude_rad = fsm.latitude_deg * snm_DEG_TO_RAD;
+                            fsm.update_latitude = 1;
+                        } else {
+                            btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+                        }
+
+                        btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
+                        btn_fast_repeat_delay_accelerated += 10;
+                        fsm.btn8_state_prev = fsm.btn8_state_curr;
+                    } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                        if (fsm.btn7_state_curr == BTN_DOWN) {
+                            if (fsm.latitude_deg < +90.00)
+                                fsm.latitude_deg += 0.01;
+
+                            fsm.latitude_rad = fsm.latitude_deg * snm_DEG_TO_RAD;
+                            fsm.update_latitude = 1;
+                        } else {
+                            btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+                        }
+
+                        btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
+                        btn_fast_repeat_delay_accelerated += 10;
+                        fsm.btn7_state_prev = fsm.btn7_state_curr;
+                    } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                        if (fsm.btn2_state_curr == BTN_DOWN) {
+                            display_mode_curr = DISPLAY_MODE_EDIT_LONGITUDE;
+                        }
+
+                        fsm.btn2_state_prev = fsm.btn2_state_curr;
+                    }
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_LONGITUDE:
+            {
+                Display_EditLongitude(&display, fsm.longitude_deg);
+
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_longitude) {
+                            /* TODO: save longitude to flash */
+                            fsm.update_longitude = 0;
+                            fsm.update_celestial = 1;
+                        }
+                    }
+
+                    display_mode_curr = display_mode_prev;
+                } else {
+                    if (fsm.btn8_state_prev != fsm.btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+                        if (fsm.btn8_state_curr == BTN_DOWN) {
+                            if (fsm.longitude_deg > -180.00)
+                                fsm.longitude_deg -= 0.01;
+
+                            fsm.longitude_rad = fsm.longitude_deg * snm_DEG_TO_RAD;
+                            fsm.update_longitude = 1;
+                        } else {
+                            btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+                        }
+
+                        btn8_pressed_counter = btn_fast_repeat_delay_accelerated;
+                        btn_fast_repeat_delay_accelerated += 10;
+                        fsm.btn8_state_prev = fsm.btn8_state_curr;
+                    } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                        if (fsm.btn7_state_curr == BTN_DOWN) {
+                            if (fsm.longitude_deg < +180.00)
+                                fsm.longitude_deg += 0.01;
+
+                            fsm.longitude_rad = fsm.longitude_deg * snm_DEG_TO_RAD;
+                            fsm.update_longitude = 1;
+                        } else {
+                            btn_fast_repeat_delay_accelerated = btn_fast_repeat_delay;
+                        }
+
+                        btn7_pressed_counter = btn_fast_repeat_delay_accelerated;
+                        btn_fast_repeat_delay_accelerated += 10;
+                        fsm.btn7_state_prev = fsm.btn7_state_curr;
+                    } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                        if (fsm.btn2_state_curr == BTN_DOWN) {
+                            display_mode_curr = DISPLAY_MODE_EDIT_TIMEZONE;
+                        }
+
+                        fsm.btn2_state_prev = fsm.btn2_state_curr;
+                    }
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_TIMEZONE:
+            {
+                Display_EditTimezone(&display, fsm.tz);
+
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_timezone) {
+                            /* TODO: save fsm.tz_idx to flash */
+//                          counter2 = *(__IO uint32_t *)0x08100000;
+                            HAL_StatusTypeDef flash_ok;
+                            uint32_t addr = 0x60000000;
+
+                            flash_ok = HAL_ERROR;
+                            while(flash_ok != HAL_OK) {
+                                flash_ok = HAL_FLASH_Unlock();
+                            }
+
+                            flash_ok = HAL_ERROR;
+                            while(flash_ok != HAL_OK) {
+                                flash_ok = HAL_FLASH_Program(TYPEPROGRAM_BYTE, addr, 0x80);
+                                Beep();
+                            }
+
+                            flash_ok = HAL_ERROR;
+                            while(flash_ok != HAL_OK) {
+                                flash_ok = HAL_FLASH_Lock();
+                            }
+
+                            volatile int c = *(volatile uint32_t *)(addr);
+
+                            fsm.update_timezone = 0;
+                            fsm.update_celestial = 1;
+                        }
+                    }
+
+                    display_mode_curr = display_mode_prev;
+                } else {
+                    if (fsm.btn8_state_prev != fsm.btn8_state_curr) {
+                        if (fsm.btn8_state_curr == BTN_DOWN) {
+                            fsm.tz_idx = (fsm.tz_idx-1) % N_TIMEZONES;
+                            fsm.tz = TIMEZONES[fsm.tz_idx];
+                            fsm.update_timezone = 1;
+                        }
+
+                        fsm.btn8_state_prev = fsm.btn8_state_curr;
+                    } else if (fsm.btn7_state_prev != fsm.btn7_state_curr) {
+                        if (fsm.btn7_state_curr == BTN_DOWN) {
+                            fsm.tz_idx = (fsm.tz_idx+1) % N_TIMEZONES;
+                            fsm.tz = TIMEZONES[fsm.tz_idx];
+                            fsm.update_timezone = 1;
+                        }
+
+                        fsm.btn7_state_prev = fsm.btn7_state_curr;
+                    } else if (fsm.btn2_state_prev != fsm.btn2_state_curr) {
+                        if (fsm.btn2_state_curr == BTN_DOWN) {
+                            display_mode_curr = DISPLAY_MODE_EDIT_AGING;
+                        }
+
+                        fsm.btn2_state_prev = fsm.btn2_state_curr;
+                    }
+                }
+            }
+            break;
+
+        case DISPLAY_MODE_EDIT_DATE:
+            Display_EditDate(&display, &fsm.ts);
+            {
+                if (fsm.btn1_state_prev != fsm.btn1_state_curr) {
+                    fsm.btn1_state_prev = fsm.btn1_state_curr;
+
+                    if (fsm.btn1_state_curr == BTN_UP) {
+                        if (fsm.update_time) {
+                            Rtc_DS3231_set(fsm.ts);
+                            fsm.update_time = 0;
+                        }
+
+                        display_mode_curr = display_mode_prev;
+                    }
+                } else if (fsm.btn8_state_prev != fsm.btn8_state_curr || btn8_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn8_state_curr == BTN_DOWN) {
+                        if (fsm.ts.year < 2015)
+                            fsm.ts.year = 2015;
+
+                        fsm.ts.year -= 2000;
+                        fsm.ts.year += 1;
+                        fsm.ts.year %= 100;
+                        fsm.ts.year += 2000;
+                        fsm.update_time = 1;
+                    }
+
+                    btn8_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn8_state_prev = fsm.btn8_state_curr;
+                } else if (fsm.btn7_state_prev != fsm.btn7_state_curr || btn7_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn7_state_curr == BTN_DOWN) {
+                        fsm.ts.mon += 1;
+                        fsm.ts.mon %= 12;
+                        fsm.update_time = 1;
+                    }
+
+                    btn7_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn7_state_prev = fsm.btn7_state_curr;
+                } else if (fsm.btn6_state_prev != fsm.btn6_state_curr || btn6_pressed_counter > btn_repeat_delay) {
+                    if (fsm.btn6_state_curr == BTN_DOWN) {
+                        fsm.ts.mday = (fsm.ts.mday % 31) + 1;
+                        fsm.update_time = 1;
+                    }
+
+                    btn6_pressed_counter = btn_fast_repeat_delay;
+                    fsm.btn6_state_prev = fsm.btn6_state_curr;
+                }
+            }
+            break;
+        }
+
+        if (fsm.btn6_state_curr == BTN_DOWN)
+            btn6_pressed_counter += cycle_delay;
+
+        if (fsm.btn7_state_curr == BTN_DOWN)
+            btn7_pressed_counter += cycle_delay;
+
+        if (fsm.btn8_state_curr == BTN_DOWN)
+            btn8_pressed_counter += cycle_delay;
+
+        HAL_Delay(cycle_delay);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -1569,19 +1779,19 @@ void StartDefaultTask(void const * argument)
 /* USER CODE BEGIN Application */
 void ModbusTask(void const * argument)
 {
-	eMBErrorCode eStatus;
+    eMBErrorCode eStatus;
 
-	eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
-	eStatus = eMBEnable();
+    eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
+    eStatus = eMBEnable();
 
-	if (eStatus != MB_ENOERR) {
-		return;
-	}
+    if (eStatus != MB_ENOERR) {
+        return;
+    }
 
-	while (1) {
-		eMBPoll();
-		taskYIELD();
-	}
+    while (1) {
+        eMBPoll();
+        taskYIELD();
+    }
 }
 /* USER CODE END Application */
 

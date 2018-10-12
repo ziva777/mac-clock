@@ -31,5 +31,5 @@ int LuminositySensorIsReady(LuminositySensor *sensor)
 void LuminositySensorBegin(LuminositySensor *sensor)
 {
 	sensor->value_ready = ATOMIC_VAR_INIT(0);
-//	HAL_ADC_Start_DMA(&hadc1, sensor->value, 1);
+	HAL_ADC_Start_DMA(&hadc1, sensor->value, 1);
 }

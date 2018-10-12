@@ -53,7 +53,7 @@ uint32_t unixtime; /* seconds since 01.01.1970 00:00:00 UTC*/
 #endif
 };
 
-typedef struct ts Timestamp;
+typedef struct ts Rtc_Timestamp;
 
 void Rtc_DS3231_init(const uint8_t creg);
 void Rtc_DS3231_set(struct ts t);
@@ -95,6 +95,6 @@ void Rtc_DS3231_get_a2(char *buf,
 void Rtc_DS3231_clear_a2f(void);
 uint8_t Rtc_DS3231_triggered_a2(void);
 
-Timestamp GetTimestampFromTm(struct tm tm);
+Rtc_Timestamp GetTimestampFromTm(struct tm tm);
 
 #endif /* INC_RTC_DS3221_H_ */
