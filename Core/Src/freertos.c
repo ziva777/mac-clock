@@ -185,7 +185,6 @@ void StartDefaultTask(void const * argument)
 
         FsmDataCalcCelestial(&fsm);
         FsmDataSetBacklight(&fsm);
-        
         FsmDataProcess(&fsm);
 
         HAL_Delay(CYCLE_DELAY);

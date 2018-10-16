@@ -125,6 +125,7 @@ void Display_P1(Display *display,
 
     tmp = AsciiToCharacter((int)(pressure / 100) % 10 + 0x30);
     c[2] = (tmp != CH_0 ? tmp : CH_BLANK);
+//    c[2] = tmp;
 
     c[1] = AsciiToCharacter((int)(pressure / 10) % 10 + 0x30);
     c[0] = AsciiToCharacter((int)(pressure / 1) % 10 + 0x30);

@@ -14,24 +14,18 @@
 static const uint16_t 	LUM_MIN = 0u;      /* Abs luminosity minimum */
 static const uint16_t 	LUM_MAX = 4095u;   /* Abs luminosity maximum */
 
-/* Установка яркости */
-//static
 void SetBrightness(uint16_t br)
 {
     htim5.Instance->CCR4 = br;
     HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
 }
 
-/* Включить PWM для индикатора */
-//static
 void SetBrightnessOn()
 {
     HAL_TIM_Base_Start(&htim5);
     HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
 }
 
-/* Установка цвета фоновой подстветки */
-//static
 void SetBacklight(uint8_t r,
 				  uint8_t g,
 				  uint8_t b)
@@ -49,7 +43,6 @@ void SetBacklight(uint8_t r,
     }
 }
 
-/* Бип */
 void Beep()
 {
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
@@ -57,8 +50,6 @@ void Beep()
     HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
 }
 
-
-//static
 float calc_brightness_linear(float l,
                              float b_inf,
                              float b_sup)

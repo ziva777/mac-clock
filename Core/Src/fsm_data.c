@@ -15,7 +15,6 @@
 #include "wire.h"
 #include "flash.h"
 #include "ws2812.h"
-//#include "kalman.h"
 #include "display.h"
 #include "display_aux.h"
 
@@ -112,6 +111,41 @@ BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P)
     var2 = (((BMP280_S32_t)(p>>2)) * ((BMP280_S32_t)dig_P8))>>13;
     p = (BMP280_U32_t)((BMP280_S32_t)p + ((var1 + var2 + dig_P7) >> 4));
     return p;
+}
+
+// Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
+// t_fine carries fine temperature as global value
+double bmp280_compensate_T_double(BMP280_S32_t adc_T)
+{
+	double var1, var2, T;
+	var1 = (((double) adc_T) / 16384.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
+	var2 = ((((double) adc_T) / 131072.0 - ((double)dig_T1)/8192.0) *
+	(((double)adc_T)/131072.0 - ((double) dig_T1)/8192.0)) * ((double)dig_T3);
+	t_fine = (BMP280_S32_t) (var1 + var2);
+	T = (var1 + var2) / 5120.0;
+	return T;
+}
+
+// Returns pressure in Pa as double. Output value of “96386.2” equals 96386.2 Pa = 963.862 hPa
+double bmp280_compensate_P_double(BMP280_S32_t adc_P)
+{
+	double var1, var2, p;
+	var1 = ((double) t_fine / 2.0) - 64000.0;
+	var2 = var1 * var1 * ((double) dig_P6) / 32768.0;
+	var2 = var2 + var1 * ((double) dig_P5) * 2.0;
+	var2 = (var2 / 4.0) + (((double) dig_P4) * 65536.0);
+	var1 = (((double) dig_P3) * var1 * var1 / 524288.0
+			+ ((double) dig_P2) * var1) / 524288.0;
+	var1 = (1.0 + var1 / 32768.0) * ((double) dig_P1);
+	if (var1 == 0.0) {
+		return 0; // avoid exception caused by division by zero
+	}
+	p = 1048576.0 - (double)adc_P;
+	p = (p - (var2 / 4096.0)) * 6250.0 / var1;
+	var1 = ((double) dig_P9) * p * p / 2147483648.0;
+	var2 = p * ((double) dig_P8) / 32768.0;
+	p = p + (var1 + var2 + ((double) dig_P7)) / 16.0;
+	return p;
 }
 
 void FsmData_ReadBmp280Coefficients()
@@ -311,6 +345,10 @@ void FsmDataCreate(FsmData *fsm)
     }
 
     FsmData_ReadBmp280Coefficients();
+    KalmanFilterInit(&fsm->pressure_filter,
+    					 4.0f,
+    					 4.0f,
+    					 0.0250f);
 }
 
 void FsmDataCalcCelestial(FsmData *fsm)
@@ -589,7 +627,8 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
 	const static uint32_t counter_bound = 100u;
 	static uint32_t counter = counter_bound;
 
-    if (--counter == 0) {
+//    if (--counter == 0) {
+	{
     	uint16_t pressure = 0;
         uint8_t data[6];
         uint8_t address[1];
@@ -605,18 +644,20 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
         uint8_t adc_P_lsb = data[1];
         uint8_t adc_P_xlsb = data[2];
 
-//        uint8_t adc_T_msb = data[3];
-//        uint8_t adc_T_lsb = data[4];
-//        uint8_t adc_T_xlsb = data[5];
+        uint8_t adc_T_msb = data[3];
+        uint8_t adc_T_lsb = data[4];
+        uint8_t adc_T_xlsb = data[5];
 
-//        BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
+        BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
         BMP280_S32_t adc_P = ((adc_P_msb << 16) | (adc_P_lsb << 8) | adc_P_xlsb) >> 4;
 
-//        BMP280_S32_t t;
-        BMP280_S32_t p;
+        BMP280_S32_t t, p;
 
-//        t = bmp280_compensate_T_int32(adc_T);
+        t = bmp280_compensate_T_int32(adc_T);
         p = bmp280_compensate_P_int32(adc_P);
+
+        (void)t;
+		p = KalmanFilterUpdate(&fsm->pressure_filter, (float)p);
 
         double tmp = p;
         tmp *= to_mmHg;

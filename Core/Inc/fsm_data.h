@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include "kalman.h"
 #include "rtc_ds3221.h"
 #include "sun_n_moon.h"
 #include "stm32f4xx_hal.h"
@@ -101,6 +102,9 @@ typedef struct {
 
     /* Rise & set calculator */
     snm_Calculator calc;
+
+    /* Atmospheric pressure filter */
+    KalmanFilter pressure_filter;
 
     /* Update flags */
     int update_time;
