@@ -5,8 +5,8 @@
  *      Author: ziva
  */
 
-#ifndef INC_AUX_H_
-#define INC_AUX_H_
+#ifndef INC_AUX2_H_
+#define INC_AUX2_H_
 
 #include <stdint.h>
 
@@ -25,4 +25,4 @@ float calc_brightness_linear(float l,
                              float b_inf,
                              float b_sup);
 
-#endif /* INC_AUX_H_ */
+#endif /* INC_AUX2_H_ */

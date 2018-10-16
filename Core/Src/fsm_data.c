@@ -5,13 +5,13 @@
  *      Author: ziva
  */
 
+#include <aux2.h>
 #include "fsm_data.h"
 
 #include <string.h>
 
 #include "i2c.h"
 
-#include "aux.h"
 #include "wire.h"
 #include "flash.h"
 #include "ws2812.h"

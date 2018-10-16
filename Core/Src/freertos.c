@@ -49,6 +49,7 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
+#include <aux2.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
@@ -63,7 +64,6 @@
 #include "mbport.h"
 #include "mbutils.h"
 
-#include "aux.h"
 #include "ws2812.h"
 #include "display.h"
 

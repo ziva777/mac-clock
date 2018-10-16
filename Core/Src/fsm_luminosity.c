@@ -5,11 +5,11 @@
  *      Author: ziva
  */
 
+#include <aux2.h>
 #include "fsm_luminosity.h"
 
 #include <stdint.h>
 
-#include "aux.h"
 #include "luminosity_sensor.h"
 
 static const uint8_t 	BR_MIN = 1u;        /* Abs brightness minimum */
