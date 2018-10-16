@@ -56,45 +56,24 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */     
-//#include <stdlib.h>
 
 #include "stm32f4xx_hal.h"
-//#include "adc.h"
-//#include "dma.h"
-//#include "i2c.h"
-//#include "spi.h"
-//#include "tim.h"
-//#include "usart.h"
-//#include "usb_otg.h"
-//#include "gpio.h"
-
-//#include <string.h>
-//#include <stdlib.h>
 
 #include "mb.h"
 #include "mbport.h"
 #include "mbutils.h"
 
 #include "aux.h"
-//#include "wire.h"
-//#include "flash.h"
 #include "ws2812.h"
-//#include "kalman.h"
 #include "display.h"
-//#include "rtc_ds3221.h"
-//#include "display_aux.h"
-//#include "luminosity_sensor.h"
 
 #include "fsm_data.h"
 #include "fsm_luminosity.h"
 
-//#include "sun_n_moon.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
-
 
 /* USER CODE END PTD */
 

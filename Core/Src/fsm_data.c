@@ -15,7 +15,7 @@
 #include "wire.h"
 #include "flash.h"
 #include "ws2812.h"
-#include "kalman.h"
+//#include "kalman.h"
 #include "display.h"
 #include "display_aux.h"
 
@@ -40,10 +40,7 @@ int16_t  dig_P9 = 6000;
 static const uint32_t 	CYCLE_DELAY = 10u;
 static const uint32_t 	BTN_REPEAT_DELAY = 1000u;
 static const uint32_t 	BTN_FAST_REPEAT_DELAY = 850u;
-//static const uint8_t 	BR_MIN = 1u;        /* Abs brightness minimum */
-//static const uint8_t 	BR_MAX = 254u;      /* Abs brightness maximum */
-//static const uint16_t 	LUM_MIN = 0u;      /* Abs luminosity minimum */
-//static const uint16_t 	LUM_MAX = 4095u;   /* Abs luminosity maximum */
+static const uint32_t 	BMP280_READ_DELAY = 5000u;
 
 extern Display display;
 
@@ -115,6 +112,104 @@ BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P)
     var2 = (((BMP280_S32_t)(p>>2)) * ((BMP280_S32_t)dig_P8))>>13;
     p = (BMP280_U32_t)((BMP280_S32_t)p + ((var1 + var2 + dig_P7) >> 4));
     return p;
+}
+
+void FsmData_ReadBmp280Coefficients()
+{
+	uint8_t data[6];
+	uint8_t address[1];
+
+	CS_SET();
+	data[0] = 0xF4 & ~0x80;
+	data[1] = 0b00100111;
+	HAL_SPI_Transmit(&hspi3, data, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// cooeff's
+	// T1
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_T1 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T1, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// T2
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_T2 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T2, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// T3
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_T3 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T3, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P1
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P1 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P1, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P2
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P2 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P2, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P3
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P3 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P3, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P4
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P4 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P4, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P5
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P5 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P5, 2, BMP280_READ_DELAY);
+	CS_SET();
+	CS_RESET();
+
+	// P6
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P6 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P6, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P7
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P7 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P7, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P8
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P8 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P8, 2, BMP280_READ_DELAY);
+	CS_RESET();
+
+	// P9
+	CS_SET();
+	address[0] = BMP280_REGISTER_DIG_P9 | 0x80;
+	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P9, 2, BMP280_READ_DELAY);
+	CS_RESET();
 }
 
 void FsmDataValidateTs(FsmData *fsm)
@@ -214,6 +309,8 @@ void FsmDataCreate(FsmData *fsm)
                                fsm->latitude_deg,
                                fsm->longitude_rad);
     }
+
+    FsmData_ReadBmp280Coefficients();
 }
 
 void FsmDataCalcCelestial(FsmData *fsm)
@@ -488,138 +585,47 @@ FSM_DATA_MODES FsmData_Do_MODE_S1_2(FsmData *fsm)
 
 FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
 {
-    uint16_t pressure = 1;
+	const static double to_mmHg = 0.00750062;
+	const static uint32_t counter_bound = 100u;
+	static uint32_t counter = counter_bound;
 
-    {
-        const uint32_t delay = 5000u;
+    if (--counter == 0) {
+    	uint16_t pressure = 0;
         uint8_t data[6];
         uint8_t address[1];
-
-        CS_SET();
-        data[0] = 0xF4 & ~0x80;
-        data[1] = 0b00100111;
-        HAL_SPI_Transmit(&hspi3, data, 2, delay);
-        CS_RESET();
-
-        // cooeff's
-        // T1
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_T1 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T1, 2, delay);
-        CS_RESET();
-
-        // T2
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_T2 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T2, 2, delay);
-        CS_RESET();
-
-        // T3
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_T3 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T3, 2, delay);
-        CS_RESET();
-
-        // P1
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P1 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P1, 2, delay);
-        CS_RESET();
-
-        // P2
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P2 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P2, 2, delay);
-        CS_RESET();
-
-        // P3
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P3 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P3, 2, delay);
-        CS_RESET();
-
-        // P4
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P4 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P4, 2, delay);
-        CS_RESET();
-
-        // P5
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P5 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P5, 2, delay);
-        CS_SET();
-        CS_RESET();
-
-        // P6
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P6 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P6, 2, delay);
-        CS_RESET();
-
-        // P7
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P7 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P7, 2, delay);
-        CS_RESET();
-
-        // P8
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P8 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P8, 2, delay);
-        CS_RESET();
-
-        // P9
-        CS_SET();
-        address[0] = BMP280_REGISTER_DIG_P9 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P9, 2, delay);
-        CS_RESET();
-
 
         // adc values
         CS_SET();
         address[0] = 0xF7 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, delay);
-        HAL_SPI_Receive(&hspi3, data, 6, delay);
+        HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
+        HAL_SPI_Receive(&hspi3, data, 6, BMP280_READ_DELAY);
         CS_RESET();
 
         uint8_t adc_P_msb = data[0];
         uint8_t adc_P_lsb = data[1];
         uint8_t adc_P_xlsb = data[2];
 
-        uint8_t adc_T_msb = data[3];
-        uint8_t adc_T_lsb = data[4];
-        uint8_t adc_T_xlsb = data[5];
+//        uint8_t adc_T_msb = data[3];
+//        uint8_t adc_T_lsb = data[4];
+//        uint8_t adc_T_xlsb = data[5];
 
-        BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
+//        BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
         BMP280_S32_t adc_P = ((adc_P_msb << 16) | (adc_P_lsb << 8) | adc_P_xlsb) >> 4;
 
-        BMP280_S32_t p, t;
+//        BMP280_S32_t t;
+        BMP280_S32_t p;
 
-        t = bmp280_compensate_T_int32(adc_T);
+//        t = bmp280_compensate_T_int32(adc_T);
         p = bmp280_compensate_P_int32(adc_P);
 
         double tmp = p;
-        tmp *= 0.00750062;
+        tmp *= to_mmHg;
         tmp *= 10.0;
 
         pressure = tmp;
-        HAL_Delay(500u);
+        counter = counter_bound;
+        Display_P1(&display, pressure);
     }
-
-    Display_P1(&display, pressure);
 
     if (fsm->btn1_state_prev != fsm->btn1_state_curr
         || fsm->btn2_state_prev != fsm->btn2_state_curr
@@ -782,7 +788,7 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_LATITUDE(FsmData *fsm)
 
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_latitude) {
-                /* TODO: save latitude to flash */
+                /* save latitude to flash */
             	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
 
                 fsm->update_latitude = 0;
@@ -841,7 +847,7 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_LONGITUDE(FsmData *fsm)
 
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_longitude) {
-                /* TODO: save longitude to flash */
+                /* save longitude to flash */
             	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
 
                 fsm->update_longitude = 0;
@@ -900,7 +906,7 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIMEZONE(FsmData *fsm)
 
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_timezone) {
-                /* TODO: save fsm->tz_idx to flash */
+                /* save fsm->tz_idx to flash */
             	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
 
                 fsm->update_timezone = 0;
