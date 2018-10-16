@@ -578,7 +578,8 @@ HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)
   /* Get tick */
   tickstart = HAL_GetTick();
 
-  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET) 
+//  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET)
+	  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_EOP) != RESET)
   { 
     if(Timeout != HAL_MAX_DELAY)
     {
