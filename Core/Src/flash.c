@@ -24,7 +24,10 @@ void FlashErase()
 	}
 }
 
-void FlashWrite(int tz_idx, double latitude, double longitude)
+void FlashWrite(int tz_idx,
+				double latitude,
+				double longitude,
+				double p_correction)
 {
 	HAL_StatusTypeDef flash_ok;
 
@@ -66,16 +69,35 @@ void FlashWrite(int tz_idx, double latitude, double longitude)
 		cast.d = longitude;
 		flash_ok = HAL_ERROR;
 		while (flash_ok != HAL_OK) {
-			flash_ok = HAL_FLASH_Program(TYPEPROGRAM_WORD, LONGITUDE_ADDR,
-					cast.u32[0]);
+			flash_ok = HAL_FLASH_Program(TYPEPROGRAM_WORD,
+										 LONGITUDE_ADDR,
+										 cast.u32[0]);
 		}
 
 		flash_ok = HAL_ERROR;
 		while (flash_ok != HAL_OK) {
 			flash_ok = HAL_FLASH_Program(TYPEPROGRAM_WORD,
-					LONGITUDE_ADDR + sizeof(int), cast.u32[1]);
+										 LONGITUDE_ADDR + sizeof(int),
+										 cast.u32[1]);
 		}
 		/* ~ long */
+
+		/* p_correction */
+		cast.d = p_correction;
+		flash_ok = HAL_ERROR;
+		while (flash_ok != HAL_OK) {
+			flash_ok = HAL_FLASH_Program(TYPEPROGRAM_WORD,
+										 PRESSURE_CORRECTION_ADDR,
+										 cast.u32[0]);
+		}
+
+		flash_ok = HAL_ERROR;
+		while (flash_ok != HAL_OK) {
+			flash_ok = HAL_FLASH_Program(TYPEPROGRAM_WORD,
+										 PRESSURE_CORRECTION_ADDR + sizeof(int),
+										 cast.u32[1]);
+		}
+		/* ~p_correction */
 
 		flash_ok = HAL_ERROR;
 		while (flash_ok != HAL_OK) {
@@ -99,5 +121,11 @@ double FlashReadLatitude()
 double FlashReadLongitude()
 {
 	double v = *(volatile double *)(LONGITUDE_ADDR);
+	return v;
+}
+
+double	FlashReadPCorrection()
+{
+	double v = *(volatile double *)(PRESSURE_CORRECTION_ADDR);
 	return v;
 }

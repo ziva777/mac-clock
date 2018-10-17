@@ -28,11 +28,15 @@ void Display_S2_1_Msg(Display *display);
 
 /* Отобразить давление */
 void Display_P1(Display *display,
-                uint16_t pressure);
+                double pressure);
 
 /* Отобразить температуру */
 void Display_P2(Display *display,
-                int16_t temp);
+				double temp);
+
+/* Отобразить высоту */
+void Display_P3(Display *display,
+				double alt);
 
 /* Отобразить чч.мм.сс */
 void Display_A1_1(Display *display,
@@ -69,6 +73,10 @@ void Display_EditLongitude(Display *display,
 /* Редактирование временной зоны */
 void Display_EditTimezone(Display *display,
                           double tz);
+
+/* Редактирование поправки давления */
+void Display_EditPCorrection(Display *display,
+        					 double p_correction);
 
 /* Редактировать дату */
 void Display_EditDate(Display *display,

@@ -7,6 +7,8 @@
 
 #include "bmp280.h"
 
+#include <math.h>
+
 static const uint32_t 	BMP280_READ_DELAY = 5000u;
 
 void ReadCoefficients(Bmp280 *bmp)
@@ -164,12 +166,10 @@ void Bmp280Create(Bmp280 *bmp,
 	KalmanFilterInit(&bmp->temp_filter, 4.0f, 4.0f, 0.0250f);
 }
 
-void Bmp280GetValues(Bmp280 *bmp,
-	      			 double *t,
-					 double *p)
+void Bmp280GetValuesInSi(Bmp280 *bmp,
+	      			 	 double *t,
+						 double *p)
 {
-	const static double to_mmHg = 0.00750062;
-
 	uint8_t data[6];
 	uint8_t address[1];
 
@@ -198,6 +198,26 @@ void Bmp280GetValues(Bmp280 *bmp,
 
 	*t = KalmanFilterUpdate(&bmp->temp_filter, (float)T);
 	*p = KalmanFilterUpdate(&bmp->pressure_filter, (float)P);
+}
 
-	*p *= to_mmHg;
+void Bmp280GetValues(Bmp280 *bmp,
+					 double *t,
+					 double *p)
+{
+	Bmp280GetValuesInSi(bmp, t, p);
+	*p *= TO_MMHG;
+}
+
+double Bmp280GetAltitude(Bmp280 *bmp,
+						 double base)
+{
+	double alt;
+	double t, p;
+
+	Bmp280GetValuesInSi(bmp, &t, &p);
+	p /= 100.0;
+
+	alt = 44330.0 * (1.0 - pow(p / base, 0.1903));
+
+	return alt;
 }

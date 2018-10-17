@@ -36,12 +36,14 @@ Transition * const STATES_TABLE[FSM_DATA_MODES_NUM] = {
     FsmData_Do_MODE_S1_2,
     FsmData_Do_MODE_P1_1,
 	FsmData_Do_MODE_P1_2,
+	FsmData_Do_MODE_P1_3,
     FsmData_Do_MODE_EDIT_TIME_1,
     FsmData_Do_MODE_EDIT_TIME_2,
     FsmData_Do_MODE_EDIT_AGING,
     FsmData_Do_MODE_EDIT_LATITUDE,
     FsmData_Do_MODE_EDIT_LONGITUDE,
     FsmData_Do_MODE_EDIT_TIMEZONE,
+	FsmData_Do_MODE_EDIT_P_CORRECTION,
     FsmData_Do_MODE_EDIT_DATE,
 };
 
@@ -81,6 +83,7 @@ void FsmDataCreate(FsmData *fsm)
     fsm->update_latitude = 0;
     fsm->update_longitude = 0;
     fsm->update_timezone = 0;
+    fsm->update_p_correction = 0;
     fsm->update_celestial = 0;
 
     fsm->btn1_state_prev = fsm->btn1_state_curr = BTN1_STATE();
@@ -151,6 +154,8 @@ void FsmDataCreate(FsmData *fsm)
 
     {
     	/* Pressure calculation */
+    	fsm->p_correction = FlashReadPCorrection();
+    	fsm->p_base = SEALEVEL_PRESSURE;
 		Bmp280Create(&fsm->bmp280, &hspi3);
     }
 
@@ -443,9 +448,12 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
 	{
 		double t, p;
 		Bmp280GetValues(&fsm->bmp280, &t, &p);
-		p *= 10.0;
+		p += fsm->p_correction;
 
         Display_P1(&display, p);
+
+//		double a = Bmp280GetAltitude(&fsm->bmp280, fsm->p_base);
+//		Display_P1(&display, a);
     }
 
     if (fsm->btn1_state_prev != fsm->btn1_state_curr
@@ -474,8 +482,7 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_2(FsmData *fsm)
 	{
 		double t, p;
 		Bmp280GetValues(&fsm->bmp280, &t, &p);
-		t /= 10.0;
-//		t *= -1.0;
+		p += fsm->p_correction;
 
         Display_P2(&display, t);
     }
@@ -494,8 +501,50 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_2(FsmData *fsm)
     	fsm->btn4_state_prev = fsm->btn4_state_curr;
 
     	if (fsm->btn4_state_curr == BTN_DOWN) {
+    		fsm->mode_curr = FSM_DATA_MODE_P1_3;
+    	}
+    }
+
+    return fsm->mode_curr;
+}
+
+FSM_DATA_MODES FsmData_Do_MODE_P1_3(FsmData *fsm)
+{
+	{
+		double a;
+
+		a = Bmp280GetAltitude(&fsm->bmp280, fsm->p_base);
+		Display_P3(&display, a);
+    }
+
+    if (fsm->btn1_state_prev != fsm->btn1_state_curr
+        || fsm->btn2_state_prev != fsm->btn2_state_curr
+        || fsm->btn3_state_prev != fsm->btn3_state_curr
+        || fsm->btn5_state_prev != fsm->btn5_state_curr
+        || fsm->btn6_state_prev != fsm->btn6_state_curr
+        || fsm->btn7_state_prev != fsm->btn7_state_curr
+        /*|| fsm->btn8_state_prev != fsm->btn8_state_curr*/)
+    {
+        fsm->mode_curr = fsm->mode_prev;
+        fsm->btn2_state_prev = fsm->btn2_state_curr;
+    } else if (fsm->btn4_state_prev != fsm->btn4_state_curr) {
+    	fsm->btn4_state_prev = fsm->btn4_state_curr;
+
+    	if (fsm->btn4_state_curr == BTN_DOWN) {
     		fsm->mode_curr = FSM_DATA_MODE_P1_1;
     	}
+    } else if (fsm->btn8_state_prev != fsm->btn8_state_curr) {
+    	fsm->btn8_state_prev = fsm->btn8_state_curr;
+
+    	if (fsm->btn8_state_curr == BTN_DOWN) {
+    		double t, p;
+    		Bmp280GetValuesInSi(&fsm->bmp280, &t, &p);
+    		p += fsm->p_correction;
+    		p /= 100.0;
+			fsm->p_base = p;
+//			fsm->p_base = 1006;
+			Beep();
+		}
     }
 
     return fsm->mode_curr;
@@ -648,7 +697,10 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_LATITUDE(FsmData *fsm)
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_latitude) {
                 /* save latitude to flash */
-            	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
+            	FlashWrite(fsm->tz_idx,
+            			   fsm->latitude_deg,
+						   fsm->longitude_deg,
+						   fsm->p_correction);
 
                 fsm->update_latitude = 0;
                 fsm->update_celestial = 1;
@@ -707,7 +759,10 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_LONGITUDE(FsmData *fsm)
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_longitude) {
                 /* save longitude to flash */
-            	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
+            	FlashWrite(fsm->tz_idx,
+						   fsm->latitude_deg,
+						   fsm->longitude_deg,
+						   fsm->p_correction);
 
                 fsm->update_longitude = 0;
                 fsm->update_celestial = 1;
@@ -766,7 +821,10 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIMEZONE(FsmData *fsm)
         if (fsm->btn1_state_curr == BTN_UP) {
             if (fsm->update_timezone) {
                 /* save fsm->tz_idx to flash */
-            	FlashWrite(fsm->tz_idx, fsm->latitude_deg, fsm->longitude_deg);
+            	FlashWrite(fsm->tz_idx,
+						   fsm->latitude_deg,
+						   fsm->longitude_deg,
+						   fsm->p_correction);
 
                 fsm->update_timezone = 0;
                 fsm->update_celestial = 1;
@@ -790,6 +848,66 @@ FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIMEZONE(FsmData *fsm)
                 fsm->update_timezone = 1;
             }
 
+            fsm->btn7_state_prev = fsm->btn7_state_curr;
+        } else if (fsm->btn2_state_prev != fsm->btn2_state_curr) {
+            if (fsm->btn2_state_curr == BTN_DOWN) {
+            	fsm->mode_curr = FSM_DATA_MODE_EDIT_P_CORRECTION;
+            }
+
+            fsm->btn2_state_prev = fsm->btn2_state_curr;
+        }
+    }
+
+    return fsm->mode_curr;
+}
+
+FSM_DATA_MODES FsmData_Do_MODE_EDIT_P_CORRECTION(FsmData *fsm)
+{
+    Display_EditPCorrection(&display, fsm->p_correction);
+
+    if (fsm->btn1_state_prev != fsm->btn1_state_curr) {
+        fsm->btn1_state_prev = fsm->btn1_state_curr;
+
+        if (fsm->btn1_state_curr == BTN_UP) {
+            if (fsm->update_p_correction) {
+                /* save latitude to flash */
+            	FlashWrite(fsm->tz_idx,
+            			   fsm->latitude_deg,
+						   fsm->longitude_deg,
+						   fsm->p_correction);
+
+                fsm->update_p_correction = 0;
+                fsm->update_celestial = 1;
+            }
+        }
+
+        fsm->mode_curr = fsm->mode_prev;
+    } else {
+        if (fsm->btn8_state_prev != fsm->btn8_state_curr || fsm->btn8_pressed_counter > BTN_REPEAT_DELAY) {
+            if (fsm->btn8_state_curr == BTN_DOWN) {
+                if (fsm->p_correction > -99.99)
+                    fsm->p_correction -= 0.1;
+
+                fsm->update_p_correction = 1;
+            } else {
+                fsm->btn8_fast_repeat_delay_accelerated = BTN_FAST_REPEAT_DELAY;
+            }
+
+            fsm->btn8_pressed_counter = fsm->btn8_fast_repeat_delay_accelerated;
+            fsm->btn8_fast_repeat_delay_accelerated += 10;
+            fsm->btn8_state_prev = fsm->btn8_state_curr;
+        } else if (fsm->btn7_state_prev != fsm->btn7_state_curr || fsm->btn7_pressed_counter > BTN_REPEAT_DELAY) {
+            if (fsm->btn7_state_curr == BTN_DOWN) {
+                if (fsm->p_correction < +99.99)
+                    fsm->p_correction += 0.1;
+
+                fsm->update_p_correction = 1;
+            } else {
+                fsm->btn7_fast_repeat_delay_accelerated = BTN_FAST_REPEAT_DELAY;
+            }
+
+            fsm->btn7_pressed_counter = fsm->btn7_fast_repeat_delay_accelerated;
+            fsm->btn7_fast_repeat_delay_accelerated += 10;
             fsm->btn7_state_prev = fsm->btn7_state_curr;
         } else if (fsm->btn2_state_prev != fsm->btn2_state_curr) {
             if (fsm->btn2_state_curr == BTN_DOWN) {

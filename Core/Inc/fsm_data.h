@@ -61,11 +61,12 @@ typedef enum {
     FSM_DATA_MODE_A1_2,
     FSM_DATA_MODE_A1_3,
 
-    FSM_DATA_MODE_S1_1,
-    FSM_DATA_MODE_S1_2,
+    FSM_DATA_MODE_S1_1,	/* Sunrise */
+    FSM_DATA_MODE_S1_2,	/* Sunset */
 
-    FSM_DATA_MODE_P1_1,
-	FSM_DATA_MODE_P1_2,
+    FSM_DATA_MODE_P1_1,	/* Atmospheric pressure */
+	FSM_DATA_MODE_P1_2,	/* Temperature */
+	FSM_DATA_MODE_P1_3,	/* Relative elevation */
 
     FSM_DATA_MODE_EDIT_TIME_1,
     FSM_DATA_MODE_EDIT_TIME_2,
@@ -73,6 +74,7 @@ typedef enum {
     FSM_DATA_MODE_EDIT_LATITUDE,
     FSM_DATA_MODE_EDIT_LONGITUDE,
     FSM_DATA_MODE_EDIT_TIMEZONE,
+	FSM_DATA_MODE_EDIT_P_CORRECTION,
     FSM_DATA_MODE_EDIT_DATE,
 
     FSM_DATA_MODES_NUM
@@ -113,6 +115,8 @@ typedef struct {
 
     /* Pressure and temperature sensor */
     Bmp280 bmp280;
+    double p_correction;
+    double p_base;
 
     /* Update flags */
     int update_time;
@@ -120,6 +124,7 @@ typedef struct {
     int update_latitude;
     int update_longitude;
     int update_timezone;
+    int update_p_correction;
     int update_celestial;
 
     /* Hardware */
@@ -155,12 +160,14 @@ FSM_DATA_MODES FsmData_Do_MODE_S1_1(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_S1_2(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_P1_2(FsmData *fsm);
+FSM_DATA_MODES FsmData_Do_MODE_P1_3(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIME_1(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIME_2(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_AGING(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_LATITUDE(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_LONGITUDE(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIMEZONE(FsmData *fsm);
+FSM_DATA_MODES FsmData_Do_MODE_EDIT_P_CORRECTION(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_DATE(FsmData *fsm);
 
 void FsmDataProcess(FsmData *fsm);

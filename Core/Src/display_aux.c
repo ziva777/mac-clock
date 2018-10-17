@@ -13,7 +13,6 @@ void Display_Msg(Display *display,
                  Character msg[],
                  size_t n_places)
 {
-//  const size_t n_places = 6;
     Dot d[n_places];
 
     d[0] = DOT_OBSCURE;
@@ -101,11 +100,12 @@ void Display_S2_1_Msg(Display *display)
 }
 
 void Display_P1(Display *display,
-                uint16_t pressure)
+			    double pressure)
 {
     const size_t n_places = 6;
     Character c[n_places];
     Dot d[n_places];
+    uint16_t p_int = pressure * 10.0;
 
     d[0] = DOT_OBSCURE;
     d[1] = DOT_HIGHLIGHT;
@@ -119,27 +119,63 @@ void Display_P1(Display *display,
     c[3] = CH_BLANK;
 
     Character tmp;
+    int blank_flag = 0;
 
-    tmp = AsciiToCharacter((int)(pressure / 1000) % 10 + 0x30);
+    tmp = AsciiToCharacter((int)(p_int / 1000) % 10 + 0x30);
     c[3] = (tmp != CH_0 ? tmp : CH_BLANK);
+    blank_flag = (tmp == CH_0);
 
-    tmp = AsciiToCharacter((int)(pressure / 100) % 10 + 0x30);
-    c[2] = (tmp != CH_0 ? tmp : CH_BLANK);
-//    c[2] = tmp;
+    tmp = AsciiToCharacter((int)(p_int / 100) % 10 + 0x30);
+    c[2] = ((blank_flag && tmp == CH_0) ? CH_BLANK : tmp);
 
-    c[1] = AsciiToCharacter((int)(pressure / 10) % 10 + 0x30);
-    c[0] = AsciiToCharacter((int)(pressure / 1) % 10 + 0x30);
+    c[1] = AsciiToCharacter((int)(p_int / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((int)(p_int / 1) % 10 + 0x30);
 
     DisplayWrite(display, c, d, n_places);
     DisplaySync(display);
 }
 
 void Display_P2(Display *display,
-                int16_t temp)
+				double temp)
 {
     const size_t n_places = 6;
     Character c[n_places];
     Dot d[n_places];
+    uint16_t t_int = temp / 10.0;
+
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_OBSCURE;
+    d[2] = DOT_HIGHLIGHT;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
+
+//    c[5] = CH_t;
+    c[5] = CH_BLANK;
+    c[4] = (t_int < 0 ? CH_MINUS : CH_PLUS);
+    c[3] = CH_BLANK;
+
+    t_int = abs(t_int);
+
+    Character tmp;
+
+    tmp = AsciiToCharacter((int)(t_int / 100) % 10 + 0x30);
+    c[3] = (tmp != CH_0 ? tmp : CH_BLANK);
+    c[2] = AsciiToCharacter((int)(t_int / 10) % 10 + 0x30);
+    c[1] = AsciiToCharacter((int)(t_int / 1) % 10 + 0x30);
+    c[0] = CH_c;
+
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
+}
+
+void Display_P3(Display *display,
+				double alt)
+{
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
+    int16_t a_int = alt * 10.0;
 
     d[0] = DOT_OBSCURE;
     d[1] = DOT_HIGHLIGHT;
@@ -148,22 +184,23 @@ void Display_P2(Display *display,
     d[4] = DOT_OBSCURE;
     d[5] = DOT_OBSCURE;
 
-    c[5] = CH_t;
-    c[4] = (temp < 0 ? CH_MINUS : CH_PLUS);
+    c[5] = CH_H;
+    c[4] = (a_int < 0 ? CH_MINUS : CH_PLUS);
     c[3] = CH_BLANK;
 
     Character tmp;
-    temp = abs(temp);
+    int blank_flag = 0;
+    a_int = abs(a_int);
 
-    tmp = AsciiToCharacter((int)(temp / 1000) % 10 + 0x30);
+    tmp = AsciiToCharacter((int)(a_int / 1000) % 10 + 0x30);
     c[3] = (tmp != CH_0 ? tmp : CH_BLANK);
+    blank_flag = (tmp == CH_0);
 
-    tmp = AsciiToCharacter((int)(temp / 100) % 10 + 0x30);
-//    c[2] = (tmp != CH_0 ? tmp : CH_BLANK);
-    c[2] = tmp;
+    tmp = AsciiToCharacter((int)(a_int / 100) % 10 + 0x30);
+    c[2] = ((blank_flag && tmp == CH_0) ? CH_BLANK : tmp);
 
-    c[1] = AsciiToCharacter((int)(temp / 10) % 10 + 0x30);
-    c[0] = AsciiToCharacter((int)(temp / 1) % 10 + 0x30);
+    c[1] = AsciiToCharacter((int)(a_int / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((int)(a_int / 1) % 10 + 0x30);
 
     DisplayWrite(display, c, d, n_places);
     DisplaySync(display);
@@ -439,6 +476,38 @@ void Display_EditTimezone(Display *display,
     int r = hi * 100 + low;
 
     c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
+    c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
+    c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);
+
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
+}
+
+void Display_EditPCorrection(Display *display,
+        					 double p_correction)
+{
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
+
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_HIGHLIGHT;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
+
+    c[5] = CH_P;
+    c[4] = CH_c;
+    c[3] = (p_correction > 0.0 ? CH_PLUS : CH_MINUS);
+
+    p_correction = fabs(p_correction);
+    int hi = p_correction;
+    int low = ((p_correction - hi) * 10.0);
+    int r = hi * 10 + low;
+
+//    c[3] = AsciiToCharacter((r / 1000) % 10 + 0x30);
     c[2] = AsciiToCharacter((r / 100) % 10 + 0x30);
     c[1] = AsciiToCharacter((r / 10) % 10 + 0x30);
     c[0] = AsciiToCharacter((r / 1) % 10 + 0x30);

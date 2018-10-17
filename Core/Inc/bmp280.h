@@ -29,6 +29,9 @@
 #define BMP280_REGISTER_DIG_P8 0x9C
 #define BMP280_REGISTER_DIG_P9 0x9E
 
+#define TO_MMHG				0.00750062
+#define SEALEVEL_PRESSURE	1013.25
+
 typedef int32_t BMP280_S32_t;
 typedef uint32_t BMP280_U32_t;
 
@@ -61,8 +64,13 @@ typedef struct {
 void Bmp280Create(Bmp280 *bmp,
 				  SPI_HandleTypeDef *hspi);
 
+void Bmp280GetValuesInSi(Bmp280 *bmp,
+					 	 double *t,	/* DegC */
+						 double *p	/* hPa */);
 void Bmp280GetValues(Bmp280 *bmp,
-					 double *t,
-					 double *p);
+					 double *t,	/* DegC */
+					 double *p	/* mmHg */);
+double Bmp280GetAltitude(Bmp280 *bmp,
+						 double base);
 
 #endif /* INC_BMP280_H_ */

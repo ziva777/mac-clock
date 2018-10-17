@@ -15,14 +15,19 @@
 //#define TZ_IDX_ADDR 	(0x080FFF80/*+0x80+0x40+0x20+0x0*/)
 //#define TZ_IDX_ADDR 	(0x080FFFF0-16)
 //#define TZ_IDX_ADDR 	(0x080E0000)
-#define TZ_IDX_ADDR 	(0x080FFF70)
-#define LATITUDE_ADDR 	(0x080FFF80)
-#define LONGITUDE_ADDR 	(0x080FFF90)
+#define TZ_IDX_ADDR 				(0x080FFF70)
+#define LATITUDE_ADDR 				(0x080FFF80)
+#define LONGITUDE_ADDR 				(0x080FFF90)
+#define PRESSURE_CORRECTION_ADDR 	(0x080FFF98)
 
 void 	FlashErase();
-void 	FlashWrite(int tz_idx, double latitude, double longitude);
+void 	FlashWrite(int tz_idx,
+				   double latitude,
+				   double longitude,
+				   double p_correction);
 int 	FlashReadTZ();
 double 	FlashReadLatitude();
 double 	FlashReadLongitude();
+double	FlashReadPCorrection();
 
 #endif /* INC_FLASH_H_ */
