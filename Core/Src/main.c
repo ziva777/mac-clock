@@ -106,9 +106,6 @@ static unsigned char ucRegCoilsBuf[REG_COILS_SIZE / 8];
 
 static unsigned char ucRegDiscBuf[REG_DISC_SIZE / 8] = { 0 };
 
-//static uint32_t lock_nesting_count = 0;
-
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,8 +119,6 @@ void MX_FREERTOS_Init(void);
 
 /* USER CODE BEGIN 0 */
 
-
-
 void __critical_enter( void )
 {
 	taskENTER_CRITICAL();
@@ -133,21 +128,6 @@ void __critical_exit( void )
 {
 	taskEXIT_CRITICAL();
 }
-
-
-
-
-
-//static uint32_t GetLuminosity()
-//{
-////	uint32_t tt[1];
-////	uint32_t flag_adc_dma;
-//}
-
-
-
-
-
 
 /* USER CODE END 0 */
 
@@ -159,8 +139,6 @@ void __critical_exit( void )
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
-
 
   /* USER CODE END 1 */
 
@@ -195,27 +173,6 @@ int main(void)
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
-
-
-//  uint8_t buf[20];
-//  buf[0] = 0xD0;
-//  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET);
-//  HAL_SPI_Transmit(&hspi3, buf, 1, 100);
-//  HAL_SPI_Receive(&hspi3, buf, 1, 100);
-//  HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET);
-//
-//  buf[0] = 0x00;
-//  HAL_I2C_Master_Transmit(&hi2c1, 0xD0, buf, 1, 100);
-//  HAL_I2C_Master_Receive(&hi2c1, 0xD0, buf, 19, 100);
-//  buf[1] = buf[0];
-
-
-
-//	HAL_SPI_Transmit(&hspi1, aa_dma, 7, 1000);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-//	HAL_Delay(1);
-//	HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);
-
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
@@ -229,27 +186,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-
-
   while (1)
   {
-
-//	  while (1) {
-//		if (LuminositySensorIsReady(&luminosity_sensor)) {
-//			uint32_t tt = luminosity_sensor.value[0];
-//
-//			DisplayWriteUint(&display, tt);
-//			DisplaySync(&display);
-//
-//			LuminositySensorBegin(&luminosity_sensor);
-//			HAL_ADC_Start_DMA(&hadc1, luminosity_sensor.value, 1);
-//		} else {
-//			DisplayWriteUint(&display, 10000);
-//			DisplaySync(&display);
-//		}
-//		HAL_Delay(cycle_delay);
-//	  }
-
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */

@@ -49,7 +49,6 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include <aux2.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
@@ -64,6 +63,7 @@
 #include "mbport.h"
 #include "mbutils.h"
 
+#include "aux2.h"
 #include "ws2812.h"
 #include "display.h"
 
@@ -91,9 +91,12 @@
 /* USER CODE BEGIN Variables */
 static const uint32_t 	CYCLE_DELAY = 10u;
 
+FsmData fsm;
+FsmLuminosity fsm_lum;
 Display display;
 size_t n_places = 6;
 
+osThreadId main_task_handle;
 osThreadId modbus_task_handle;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
@@ -101,6 +104,7 @@ osThreadId defaultTaskHandle;
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
+void MainTask(void const * argument);
 void ModbusTask(void const * argument);
 
 /* USER CODE END FunctionPrototypes */
@@ -133,11 +137,14 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1024);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  osThreadDef(main_task, MainTask, osPriorityNormal, 0, 1024);
+  main_task_handle = osThreadCreate(osThread(main_task), NULL);
+
   osThreadDef(modbus_task, ModbusTask, osPriorityNormal, 0, 128);
   modbus_task_handle = osThreadCreate(osThread(modbus_task), NULL);
   /* USER CODE END RTOS_THREADS */
@@ -158,47 +165,54 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN StartDefaultTask */
-    {
-        /* Hardware setup */
-        HAL_Delay(10);
-        ws2812_init();
-        SetBrightnessOn();
-        SetBrightness(200u);
-        Beep();
-    }
-
-    FsmData fsm;
-    FsmLuminosity fsm_lum;
-    
-    FsmDataCreate(&fsm);
-    FsmLuminosityCreate(&fsm_lum);
-
-    DisplayCreate(&display,
-                  n_places,
-                  &hspi1,
-                  LED_DATA_LATCH_GPIO_Port,
-                  LED_DATA_LATCH_Pin);
-
-  /* Infinite loop */
-    while (1) {
-        FsmLuminosityDoCalc(&fsm_lum);
-
-        FsmDataCalcCelestial(&fsm);
-        FsmDataSetBacklight(&fsm);
-        FsmDataProcess(&fsm);
-
-        HAL_Delay(CYCLE_DELAY);
-  }
+	while (1) {
+		HAL_Delay(1000u);
+	}
   /* USER CODE END StartDefaultTask */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+void MainTask(void const * argument)
+{
+	{
+		/* Hardware setup */
+		HAL_Delay(10);
+		ws2812_init();
+		SetBrightnessOn();
+		SetBrightness(200u);
+		Beep();
+	}
+
+	FsmDataCreate(&fsm);
+	FsmLuminosityCreate(&fsm_lum);
+
+	DisplayCreate(&display, n_places, &hspi1,
+	LED_DATA_LATCH_GPIO_Port,
+	LED_DATA_LATCH_Pin);
+
+	/* Infinite loop */
+	while (1) {
+		FsmLuminosityDoCalc(&fsm_lum);
+
+		FsmDataCalcCelestial(&fsm);
+		FsmDataSetBacklight(&fsm);
+		FsmDataProcess(&fsm);
+
+		HAL_Delay(CYCLE_DELAY);
+	}
+}
+
 void ModbusTask(void const * argument)
 {
     eMBErrorCode eStatus;
 
     eStatus = eMBInit(MB_RTU, 1, 2, 115200, MB_PAR_NONE);
+
+    if (eStatus != MB_ENOERR) {
+		return;
+	}
+
     eStatus = eMBEnable();
 
     if (eStatus != MB_ENOERR) {

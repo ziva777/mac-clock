@@ -5,7 +5,8 @@
  *      Author: ziva
  */
 
-#include <aux2.h>
+#include "aux2.h"
+
 #include "tim.h"
 #include "ws2812.h"
 #include "stm32f4xx_hal.h"

@@ -134,6 +134,41 @@ void Display_P1(Display *display,
     DisplaySync(display);
 }
 
+void Display_P2(Display *display,
+                int16_t temp)
+{
+    const size_t n_places = 6;
+    Character c[n_places];
+    Dot d[n_places];
+
+    d[0] = DOT_OBSCURE;
+    d[1] = DOT_HIGHLIGHT;
+    d[2] = DOT_OBSCURE;
+    d[3] = DOT_OBSCURE;
+    d[4] = DOT_OBSCURE;
+    d[5] = DOT_OBSCURE;
+
+    c[5] = CH_t;
+    c[4] = (temp < 0 ? CH_MINUS : CH_PLUS);
+    c[3] = CH_BLANK;
+
+    Character tmp;
+    temp = abs(temp);
+
+    tmp = AsciiToCharacter((int)(temp / 1000) % 10 + 0x30);
+    c[3] = (tmp != CH_0 ? tmp : CH_BLANK);
+
+    tmp = AsciiToCharacter((int)(temp / 100) % 10 + 0x30);
+//    c[2] = (tmp != CH_0 ? tmp : CH_BLANK);
+    c[2] = tmp;
+
+    c[1] = AsciiToCharacter((int)(temp / 10) % 10 + 0x30);
+    c[0] = AsciiToCharacter((int)(temp / 1) % 10 + 0x30);
+
+    DisplayWrite(display, c, d, n_places);
+    DisplaySync(display);
+}
+
 void Display_A1_1(Display *display,
                   Rtc_Timestamp *ts)
 {

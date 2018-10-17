@@ -18,28 +18,9 @@
 #include "display.h"
 #include "display_aux.h"
 
-typedef int32_t BMP280_S32_t;
-typedef uint32_t BMP280_U32_t;
-
-BMP280_S32_t t_fine;
-uint16_t dig_T1 = 27936;
-int16_t  dig_T2 = 26726;
-int16_t  dig_T3 = 50;
-
-uint16_t dig_P1 = 38285;
-int16_t  dig_P2 = -10543;
-int16_t  dig_P3 = 3024;
-int16_t  dig_P4 = 8470;
-int16_t  dig_P5 = -110;
-int16_t  dig_P6 = -7;
-int16_t  dig_P7 = 15500;
-int16_t  dig_P8 = -14600;
-int16_t  dig_P9 = 6000;
-
 static const uint32_t 	CYCLE_DELAY = 10u;
 static const uint32_t 	BTN_REPEAT_DELAY = 1000u;
 static const uint32_t 	BTN_FAST_REPEAT_DELAY = 850u;
-static const uint32_t 	BMP280_READ_DELAY = 5000u;
 
 extern Display display;
 
@@ -54,6 +35,7 @@ Transition * const STATES_TABLE[FSM_DATA_MODES_NUM] = {
     FsmData_Do_MODE_S1_1,
     FsmData_Do_MODE_S1_2,
     FsmData_Do_MODE_P1_1,
+	FsmData_Do_MODE_P1_2,
     FsmData_Do_MODE_EDIT_TIME_1,
     FsmData_Do_MODE_EDIT_TIME_2,
     FsmData_Do_MODE_EDIT_AGING,
@@ -69,194 +51,17 @@ FSM_DATA_MODES process_state(FSM_DATA_MODES curr_state, FsmData *state_data) {
 
 /* Private */
 
-// Returns temperature in DegC, resolution is 0.01 DegC. Output value of “5123” equals 51.23 DegC.
-// t_fine carries fine temperature as global value
-BMP280_S32_t bmp280_compensate_T_int32(BMP280_S32_t adc_T)
-{
-    BMP280_S32_t var1, var2, T;
-
-    var1 = ((((adc_T>>3) - ((BMP280_S32_t)dig_T1<<1))) * ((BMP280_S32_t)dig_T2)) >> 11;
-    var2 = (((((adc_T>>4) - ((BMP280_S32_t)dig_T1)) * ((adc_T>>4) - ((BMP280_S32_t)dig_T1))) >> 12) * ((BMP280_S32_t)dig_T3)) >> 14;
-    t_fine = var1 + var2;
-    T = (t_fine * 5 + 128) >> 8;
-    return T;
-}
-
-// Returns pressure in Pa as unsigned 32 bit integer. Output value of “96386” equals 96386 Pa = 963.86 hPa
-BMP280_U32_t bmp280_compensate_P_int32(BMP280_S32_t adc_P)
-{
-    BMP280_S32_t var1, var2;
-    BMP280_U32_t p;
-
-    var1 = (((BMP280_S32_t)t_fine)>>1) - (BMP280_S32_t)64000;
-    var2 = (((var1>>2) * (var1>>2)) >> 11 ) * ((BMP280_S32_t)dig_P6);
-    var2 = var2 + ((var1*((BMP280_S32_t)dig_P5))<<1);
-    var2 = (var2>>2)+(((BMP280_S32_t)dig_P4)<<16);
-    var1 = (((dig_P3 * (((var1>>2) * (var1>>2)) >> 13 )) >> 3) + ((((BMP280_S32_t)dig_P2) * var1)>>1))>>18;
-    var1 =((((32768+var1))*((BMP280_S32_t)dig_P1))>>15);
-
-    if (var1 == 0) {
-        return 0; // avoid exception caused by division by zero
-    }
-
-    p = (((BMP280_U32_t)(((BMP280_S32_t)1048576)-adc_P)-(var2>>12)))*3125;
-
-    if (p < 0x80000000) {
-        p = (p << 1) / ((BMP280_U32_t)var1);
-    } else {
-        p = (p / (BMP280_U32_t)var1) * 2;
-    }
-
-    var1 = (((BMP280_S32_t)dig_P9) * ((BMP280_S32_t)(((p>>3) * (p>>3))>>13)))>>12;
-    var2 = (((BMP280_S32_t)(p>>2)) * ((BMP280_S32_t)dig_P8))>>13;
-    p = (BMP280_U32_t)((BMP280_S32_t)p + ((var1 + var2 + dig_P7) >> 4));
-    return p;
-}
-
-// Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
-// t_fine carries fine temperature as global value
-double bmp280_compensate_T_double(BMP280_S32_t adc_T)
-{
-	double var1, var2, T;
-	var1 = (((double) adc_T) / 16384.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
-	var2 = ((((double) adc_T) / 131072.0 - ((double)dig_T1)/8192.0) *
-	(((double)adc_T)/131072.0 - ((double) dig_T1)/8192.0)) * ((double)dig_T3);
-	t_fine = (BMP280_S32_t) (var1 + var2);
-	T = (var1 + var2) / 5120.0;
-	return T;
-}
-
-// Returns pressure in Pa as double. Output value of “96386.2” equals 96386.2 Pa = 963.862 hPa
-double bmp280_compensate_P_double(BMP280_S32_t adc_P)
-{
-	double var1, var2, p;
-	var1 = ((double) t_fine / 2.0) - 64000.0;
-	var2 = var1 * var1 * ((double) dig_P6) / 32768.0;
-	var2 = var2 + var1 * ((double) dig_P5) * 2.0;
-	var2 = (var2 / 4.0) + (((double) dig_P4) * 65536.0);
-	var1 = (((double) dig_P3) * var1 * var1 / 524288.0
-			+ ((double) dig_P2) * var1) / 524288.0;
-	var1 = (1.0 + var1 / 32768.0) * ((double) dig_P1);
-	if (var1 == 0.0) {
-		return 0; // avoid exception caused by division by zero
-	}
-	p = 1048576.0 - (double)adc_P;
-	p = (p - (var2 / 4096.0)) * 6250.0 / var1;
-	var1 = ((double) dig_P9) * p * p / 2147483648.0;
-	var2 = p * ((double) dig_P8) / 32768.0;
-	p = p + (var1 + var2 + ((double) dig_P7)) / 16.0;
-	return p;
-}
-
-void FsmData_ReadBmp280Coefficients()
-{
-	uint8_t data[6];
-	uint8_t address[1];
-
-	CS_SET();
-	data[0] = 0xF4 & ~0x80;
-	data[1] = 0b00100111;
-	HAL_SPI_Transmit(&hspi3, data, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// cooeff's
-	// T1
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_T1 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T1, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// T2
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_T2 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T2, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// T3
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_T3 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_T3, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P1
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P1 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P1, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P2
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P2 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P2, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P3
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P3 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P3, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P4
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P4 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P4, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P5
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P5 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P5, 2, BMP280_READ_DELAY);
-	CS_SET();
-	CS_RESET();
-
-	// P6
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P6 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P6, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P7
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P7 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P7, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P8
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P8 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P8, 2, BMP280_READ_DELAY);
-	CS_RESET();
-
-	// P9
-	CS_SET();
-	address[0] = BMP280_REGISTER_DIG_P9 | 0x80;
-	HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-	HAL_SPI_Receive(&hspi3, (uint8_t *)&dig_P9, 2, BMP280_READ_DELAY);
-	CS_RESET();
-}
-
 void FsmDataValidateTs(FsmData *fsm)
 {
     if (fsm->ts.mday == 0 || fsm->ts.mon == 0 || fsm->ts.year < 2015) {
-        /* ... */
-        fsm->ts.mday = 1;
-        fsm->ts.mon = 1;
-        fsm->ts.year = 2015;
+        /* Set to default */
+        fsm->ts.mday = DT_MIN_DAY;
+        fsm->ts.mon = DT_MIN_MON;
+        fsm->ts.year = DT_MIN_YEAR;
 
-        fsm->ts.hour = 0;
-        fsm->ts.min = 0;
-        fsm->ts.sec = 0;
+        fsm->ts.hour = DT_MIN_HOUR;
+        fsm->ts.min = DT_MIN_MIN;
+        fsm->ts.sec = DT_MIN_SEC;
         Rtc_DS3231_set(fsm->ts);
     }
 }
@@ -344,11 +149,11 @@ void FsmDataCreate(FsmData *fsm)
                                fsm->longitude_rad);
     }
 
-    FsmData_ReadBmp280Coefficients();
-    KalmanFilterInit(&fsm->pressure_filter,
-    					 4.0f,
-    					 4.0f,
-    					 0.0250f);
+    {
+    	/* Pressure calculation */
+		Bmp280Create(&fsm->bmp280, &hspi3);
+    }
+
 }
 
 void FsmDataCalcCelestial(FsmData *fsm)
@@ -388,25 +193,35 @@ void FsmDataSetBacklight(FsmData *fsm)
             || (fsm->ts.hour == fsm->sun_rise2.hour &&
                 fsm->ts.min < fsm->sun_rise2.min))
     {
-        SetBacklight(255, 0, 0); // ночь
+		SetBacklight(NIGHT_BG_COLOR_R,
+					 NIGHT_BG_COLOR_G,
+					 NIGHT_BG_COLOR_B); // ночь
     } else if ((fsm->ts.hour > fsm->sun_set2.hour)
             || (fsm->ts.hour == fsm->sun_set2.hour &&
                 fsm->ts.min > fsm->sun_set2.min))
     {
-        SetBacklight(255, 0, 0); // ночь
+    	SetBacklight(NIGHT_BG_COLOR_R,
+    				 NIGHT_BG_COLOR_G,
+					 NIGHT_BG_COLOR_B); // ночь
     } else {
         if ((fsm->ts.hour < fsm->sun_rise1.hour)
                 || (fsm->ts.hour == fsm->sun_rise1.hour &&
                     fsm->ts.min < fsm->sun_rise1.min))
         {
-            SetBacklight(255, 127, 0); // сумерки
+            SetBacklight(TWILIGHT_BG_COLOR_R,
+            			 TWILIGHT_BG_COLOR_G,
+						 TWILIGHT_BG_COLOR_B); // сумерки
         } else if ((fsm->ts.hour > fsm->sun_set1.hour)
                 || (fsm->ts.hour == fsm->sun_set1.hour &&
                     fsm->ts.min > fsm->sun_set1.min))
         {
-            SetBacklight(255, 127, 0); // сумерки
+        	SetBacklight(TWILIGHT_BG_COLOR_R,
+						 TWILIGHT_BG_COLOR_G,
+						 TWILIGHT_BG_COLOR_B); // сумерки
         } else {
-            SetBacklight(255, 255, 255); // день
+			SetBacklight(DAYLIGHT_BG_COLOR_R,
+						 DAYLIGHT_BG_COLOR_G,
+						 DAYLIGHT_BG_COLOR_B); // день
         }
     }
 }
@@ -462,6 +277,8 @@ FSM_DATA_MODES FsmData_Do_MODE_A1_1(FsmData *fsm)
             Beep();
         }
     } else if (fsm->btn4_state_prev != fsm->btn4_state_curr) {
+    	fsm->btn4_state_prev = fsm->btn4_state_curr;
+
         if (fsm->btn4_state_curr == BTN_DOWN) {
             fsm->mode_prev = fsm->mode_curr;
             fsm->mode_curr = FSM_DATA_MODE_P1_1;
@@ -623,49 +440,12 @@ FSM_DATA_MODES FsmData_Do_MODE_S1_2(FsmData *fsm)
 
 FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
 {
-	const static double to_mmHg = 0.00750062;
-	const static uint32_t counter_bound = 100u;
-	static uint32_t counter = counter_bound;
-
-//    if (--counter == 0) {
 	{
-    	uint16_t pressure = 0;
-        uint8_t data[6];
-        uint8_t address[1];
+		double t, p;
+		Bmp280GetValues(&fsm->bmp280, &t, &p);
+		p *= 10.0;
 
-        // adc values
-        CS_SET();
-        address[0] = 0xF7 | 0x80;
-        HAL_SPI_Transmit(&hspi3, address, 1, BMP280_READ_DELAY);
-        HAL_SPI_Receive(&hspi3, data, 6, BMP280_READ_DELAY);
-        CS_RESET();
-
-        uint8_t adc_P_msb = data[0];
-        uint8_t adc_P_lsb = data[1];
-        uint8_t adc_P_xlsb = data[2];
-
-        uint8_t adc_T_msb = data[3];
-        uint8_t adc_T_lsb = data[4];
-        uint8_t adc_T_xlsb = data[5];
-
-        BMP280_S32_t adc_T = ((adc_T_msb << 16) | (adc_T_lsb << 8) | adc_T_xlsb) >> 4;
-        BMP280_S32_t adc_P = ((adc_P_msb << 16) | (adc_P_lsb << 8) | adc_P_xlsb) >> 4;
-
-        BMP280_S32_t t, p;
-
-        t = bmp280_compensate_T_int32(adc_T);
-        p = bmp280_compensate_P_int32(adc_P);
-
-        (void)t;
-		p = KalmanFilterUpdate(&fsm->pressure_filter, (float)p);
-
-        double tmp = p;
-        tmp *= to_mmHg;
-        tmp *= 10.0;
-
-        pressure = tmp;
-        counter = counter_bound;
-        Display_P1(&display, pressure);
+        Display_P1(&display, p);
     }
 
     if (fsm->btn1_state_prev != fsm->btn1_state_curr
@@ -678,6 +458,44 @@ FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm)
     {
         fsm->mode_curr = fsm->mode_prev;
         fsm->btn2_state_prev = fsm->btn2_state_curr;
+    } else if (fsm->btn4_state_prev != fsm->btn4_state_curr) {
+    	fsm->btn4_state_prev = fsm->btn4_state_curr;
+
+    	if (fsm->btn4_state_curr == BTN_DOWN) {
+    		fsm->mode_curr = FSM_DATA_MODE_P1_2;
+    	}
+    }
+
+    return fsm->mode_curr;
+}
+
+FSM_DATA_MODES FsmData_Do_MODE_P1_2(FsmData *fsm)
+{
+	{
+		double t, p;
+		Bmp280GetValues(&fsm->bmp280, &t, &p);
+		t /= 10.0;
+//		t *= -1.0;
+
+        Display_P2(&display, t);
+    }
+
+    if (fsm->btn1_state_prev != fsm->btn1_state_curr
+        || fsm->btn2_state_prev != fsm->btn2_state_curr
+        || fsm->btn3_state_prev != fsm->btn3_state_curr
+        || fsm->btn5_state_prev != fsm->btn5_state_curr
+        || fsm->btn6_state_prev != fsm->btn6_state_curr
+        || fsm->btn7_state_prev != fsm->btn7_state_curr
+        || fsm->btn8_state_prev != fsm->btn8_state_curr)
+    {
+        fsm->mode_curr = fsm->mode_prev;
+        fsm->btn2_state_prev = fsm->btn2_state_curr;
+    } else if (fsm->btn4_state_prev != fsm->btn4_state_curr) {
+    	fsm->btn4_state_prev = fsm->btn4_state_curr;
+
+    	if (fsm->btn4_state_curr == BTN_DOWN) {
+    		fsm->mode_curr = FSM_DATA_MODE_P1_1;
+    	}
     }
 
     return fsm->mode_curr;

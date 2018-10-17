@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include "bmp280.h"
 #include "kalman.h"
 #include "rtc_ds3221.h"
 #include "sun_n_moon.h"
@@ -30,21 +31,27 @@
 #define BTN7_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN6_GPIO_Port, BTN6_Pin)
 #define BTN8_STATE()   (BTN_STATES)HAL_GPIO_ReadPin(BTN7_GPIO_Port, BTN7_Pin)
 
-#define CS_SET()        HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_RESET)
-#define CS_RESET()      HAL_GPIO_WritePin(BMP280_NSS_GPIO_Port, BMP280_NSS_Pin, GPIO_PIN_SET)
+/* Background color */
+#define NIGHT_BG_COLOR_R 	255
+#define NIGHT_BG_COLOR_G 	0
+#define NIGHT_BG_COLOR_B 	0
 
-#define BMP280_REGISTER_DIG_T1 0x88
-#define BMP280_REGISTER_DIG_T2 0x8A
-#define BMP280_REGISTER_DIG_T3 0x8C
-#define BMP280_REGISTER_DIG_P1 0x8E
-#define BMP280_REGISTER_DIG_P2 0x90
-#define BMP280_REGISTER_DIG_P3 0x92
-#define BMP280_REGISTER_DIG_P4 0x94
-#define BMP280_REGISTER_DIG_P5 0x96
-#define BMP280_REGISTER_DIG_P6 0x98
-#define BMP280_REGISTER_DIG_P7 0x9A
-#define BMP280_REGISTER_DIG_P8 0x9C
-#define BMP280_REGISTER_DIG_P9 0x9E
+#define DAYLIGHT_BG_COLOR_R 255
+#define DAYLIGHT_BG_COLOR_G 255
+#define DAYLIGHT_BG_COLOR_B 255
+
+#define TWILIGHT_BG_COLOR_R 255
+#define TWILIGHT_BG_COLOR_G 127
+#define TWILIGHT_BG_COLOR_B 0
+
+/* Default datetime */
+#define DT_MIN_HOUR	12
+#define DT_MIN_MIN	0
+#define DT_MIN_SEC	0
+
+#define DT_MIN_DAY	1
+#define DT_MIN_MON	1
+#define DT_MIN_YEAR	18
 
 /*
  * FSM data states
@@ -58,6 +65,7 @@ typedef enum {
     FSM_DATA_MODE_S1_2,
 
     FSM_DATA_MODE_P1_1,
+	FSM_DATA_MODE_P1_2,
 
     FSM_DATA_MODE_EDIT_TIME_1,
     FSM_DATA_MODE_EDIT_TIME_2,
@@ -103,8 +111,8 @@ typedef struct {
     /* Rise & set calculator */
     snm_Calculator calc;
 
-    /* Atmospheric pressure filter */
-    KalmanFilter pressure_filter;
+    /* Pressure and temperature sensor */
+    Bmp280 bmp280;
 
     /* Update flags */
     int update_time;
@@ -146,6 +154,7 @@ FSM_DATA_MODES FsmData_Do_MODE_A1_3(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_S1_1(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_S1_2(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_P1_1(FsmData *fsm);
+FSM_DATA_MODES FsmData_Do_MODE_P1_2(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIME_1(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_TIME_2(FsmData *fsm);
 FSM_DATA_MODES FsmData_Do_MODE_EDIT_AGING(FsmData *fsm);

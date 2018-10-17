@@ -30,6 +30,10 @@ void Display_S2_1_Msg(Display *display);
 void Display_P1(Display *display,
                 uint16_t pressure);
 
+/* Отобразить температуру */
+void Display_P2(Display *display,
+                int16_t temp);
+
 /* Отобразить чч.мм.сс */
 void Display_A1_1(Display *display,
                   Rtc_Timestamp *ts);
