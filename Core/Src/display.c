@@ -40,9 +40,9 @@ HAL_StatusTypeDef DisplaySend(Display *display)
 						   display->display_buffer.buffer,
 						   display->display_buffer.buffer_size / sizeof(uint16_t),
 						   display->transmit_timeout);
-	HAL_GPIO_TogglePin(display->port, display->pin);
+	HAL_GPIO_WritePin(display->port, display->pin, GPIO_PIN_SET);
 	HAL_Delay(1);
-	HAL_GPIO_TogglePin(display->port, display->pin);
+	HAL_GPIO_WritePin(display->port, display->pin, GPIO_PIN_RESET);
 
 //		HAL_SPI_Transmit(&hspi1, display->display_buffer.display_buffer, 7, 1000);
 //		HAL_GPIO_TogglePin(LED_DATA_LATCH_GPIO_Port, LED_DATA_LATCH_Pin);

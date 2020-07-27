@@ -7,6 +7,8 @@
 
 #include "display_buffer.h"
 
+#include "FreeRTOS.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -26,7 +28,7 @@ void DisplayBufferCreate(DisplayBuffer *buffer,
 	buffer->symbols_buffer_size = logical_size;
 	buffer->dots_buffer_size = (logical_size / (sizeof(uint16_t) * N_BITS_IN_BYTE) + 1);
 	buffer->buffer_size = (buffer->symbols_buffer_size + buffer->dots_buffer_size) * sizeof(uint16_t);
-    buffer->buffer = malloc(buffer->buffer_size);
+    buffer->buffer = pvPortMalloc(buffer->buffer_size);
 
     memset(buffer->buffer, 0, buffer->buffer_size);
 }
@@ -38,7 +40,7 @@ void DisplayBufferDispose(DisplayBuffer *buffer)
     buffer->dots_buffer_size = 0;
     buffer->buffer_size = 0;
 
-    free(buffer->buffer);
+    vPortFree(buffer->buffer);
 }
 
 void DisplayBufferWrite(DisplayBuffer *buffer,
@@ -55,7 +57,7 @@ void DisplayBufferWriteDots(DisplayBuffer *buffer,
 							size_t logical_size)
 {
 	size_t dot_buff_size = (logical_size / N_BITS_IN_BYTE) + 1;
-	uint8_t *dot_buff = malloc(dot_buff_size);
+	uint8_t *dot_buff = (uint8_t*)pvPortMalloc(dot_buff_size);
 	size_t k, l;
 
 	/* Dots buffer */
@@ -73,7 +75,7 @@ void DisplayBufferWriteDots(DisplayBuffer *buffer,
 	}
 
 	memcpy(buffer->buffer, dot_buff, dot_buff_size);
-	free(dot_buff);
+	vPortFree(dot_buff);
 }
 
 void DisplayBufferWriteCharacters(DisplayBuffer *buffer,

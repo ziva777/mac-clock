@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include "main.h"
+
 #include "kalman.h"
 #include "stm32f4xx_hal.h"
 
