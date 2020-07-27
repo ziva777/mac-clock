@@ -1,0 +1,5 @@
+aux2.c:17:6:SetBrightness	16	static
+aux2.c:23:6:SetBrightnessOn	8	static
+aux2.c:29:6:SetBacklight	16	static
+aux2.c:46:6:Beep	8	static
+aux2.c:53:7:calc_brightness_linear	40	static

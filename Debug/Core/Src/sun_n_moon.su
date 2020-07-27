@@ -1,0 +1,17 @@
+sun_n_moon.c:50:8:JulianDay	80	static
+sun_n_moon.c:79:8:TtMinusUt	80	static
+sun_n_moon.c:114:6:SetUTDate	32	static
+sun_n_moon.c:121:6:SetTimes	40	static
+sun_n_moon.c:144:8:NormalizeRadians	24	static
+sun_n_moon.c:162:6:GetSun	32	static
+sun_n_moon.c:203:6:GetMoon	64	static
+sun_n_moon.c:281:6:DoCalc	120	static
+sun_n_moon.c:470:8:ObtainAccurateRiseSetTransit	48	static
+sun_n_moon.c:507:6:snm_CalculatorCreate	16	static
+sun_n_moon.c:512:6:snm_CalculatorSetTime	24	static
+sun_n_moon.c:519:6:snm_CalculatorSetDate	24	static
+sun_n_moon.c:526:6:snm_CalculatorSetPoint	32	static
+sun_n_moon.c:532:6:snm_CalculatorSetTwilight	16	static
+sun_n_moon.c:538:6:snm_CalculatorCalc	168	static
+sun_n_moon.c:620:6:GetDate	32	static
+sun_n_moon.c:676:11:snm_CalculatorGetDateAsTm	40	static

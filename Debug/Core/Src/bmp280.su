@@ -1,0 +1,7 @@
+bmp280.c:14:6:ReadCoefficients	32	static
+bmp280.c:115:14:bmp280_compensate_T_int32	32	static
+bmp280.c:128:14:bmp280_compensate_P_int32	32	static
+bmp280.c:158:6:Bmp280Create	16	static
+bmp280.c:169:6:Bmp280GetValuesInSi	72	static
+bmp280.c:203:6:Bmp280GetValues	32	static
+bmp280.c:211:8:Bmp280GetAltitude	56	static

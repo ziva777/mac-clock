@@ -1,0 +1,2 @@
+kalman.c:15:6:KalmanFilterInit	24	static
+kalman.c:25:7:KalmanFilterUpdate	32	static

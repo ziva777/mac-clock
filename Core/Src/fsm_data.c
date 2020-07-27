@@ -144,6 +144,11 @@ void FsmDataCreate(FsmData *fsm)
         fsm->longitude_rad = fsm->longitude_deg * snm_DEG_TO_RAD;
     }
 
+//    FlashWrite(fsm->tz_idx,
+//    						   fsm->latitude_deg,
+//    						   fsm->longitude_deg,
+//    						   fsm->p_correction);
+
     {
         /* Sun & moon calculator */
         snm_CalculatorCreate(&fsm->calc);

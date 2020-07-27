@@ -1,0 +1,2 @@
+fsm_luminosity.c:18:6:FsmLuminosityCreate	16	static
+fsm_luminosity.c:29:6:FsmLuminosityDoCalc	16	static

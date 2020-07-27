@@ -1,0 +1,5 @@
+display_buffer.c:18:6:DisplayBufferCreate	16	static
+display_buffer.c:36:6:DisplayBufferDispose	16	static
+display_buffer.c:46:6:DisplayBufferWrite	24	static
+display_buffer.c:55:6:DisplayBufferWriteDots	48	static
+display_buffer.c:81:6:DisplayBufferWriteCharacters	32	static

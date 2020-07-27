@@ -1,0 +1,10 @@
+character.h:212:25:AsciiToCharacter	24	static
+display.c:14:6:DisplayCreate	24	static
+display.c:29:6:DisplayDispose	16	static
+display.c:34:19:DisplaySend	24	static
+display.c:55:6:DisplayWrite	24	static
+display.c:63:6:DisplayWriteCharacters	24	static
+display.c:70:6:DisplayWriteDots	24	static
+display.c:77:6:DisplayWriteStr	56	dynamic
+display.c:90:6:DisplayWriteUint	48	dynamic
+display.c:115:6:DisplaySync	16	static

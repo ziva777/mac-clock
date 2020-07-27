@@ -1,0 +1,6 @@
+flash.c:10:6:FlashErase	16	static
+flash.c:27:6:FlashWrite	64	static
+flash.c:109:5:FlashReadTZ	16	static
+flash.c:115:8:FlashReadLatitude	16	static
+flash.c:121:8:FlashReadLongitude	16	static
+flash.c:127:8:FlashReadPCorrection	16	static
