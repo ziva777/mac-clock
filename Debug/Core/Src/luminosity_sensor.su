@@ -1,4 +1,0 @@
-luminosity_sensor.c:14:6:LuminositySensorCreate	24	static
-luminosity_sensor.c:20:6:LuminositySensorCommit	16	static
-luminosity_sensor.c:25:5:LuminositySensorIsReady	32	static
-luminosity_sensor.c:31:6:LuminositySensorBegin	24	static

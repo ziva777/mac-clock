@@ -1,6 +1,0 @@
-wire.c:20:6:Wire_SetI2C	16	static
-wire.c:25:6:Wire_beginTransmission	16	static
-wire.c:33:9:Wire_endTransmission	16	static
-wire.c:43:9:Wire_requestFrom	24	static
-wire.c:58:8:Wire_write	16	static
-wire.c:64:5:Wire_read	4	static

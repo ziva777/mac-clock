@@ -1,2 +1,0 @@
-ws2812.c:14:6:ws2812_init	16	static
-ws2812.c:24:6:ws2812_pixel_rgb_to_buf_dma	24	static
